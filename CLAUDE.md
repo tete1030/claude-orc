@@ -29,7 +29,7 @@ orchestrator/
 │   └── research/            # Research findings and test results
 ├── examples/                 # Example orchestrator configurations
 ├── scripts/                  # Utility scripts
-│   ├── bg.sh                # Background process manager
+│   ├── claude-bg             # Background process manager (install into user or system path)
 │   ├── docker-claude-code.sh # Docker management script
 │   ├── diagnose_agent_states.py  # Agent state diagnostic tool
 │   └── monitor_live_states.py    # Live state monitoring tool
@@ -173,23 +173,29 @@ Messages are delivered based on agent state:
 
 ## Background Process Management
 
-### CRITICAL: Use bg.sh for Background Processes
+### CRITICAL: Use claude-bg for Background Processes
 - **NEVER** use `&` to run background processes - it doesn't work properly in the Bash tool
-- **ALWAYS** use the background process manager script: `scripts/bg.sh`
+- **ALWAYS** use the background process manager: `claude-bg`
+
+### Installation:
+```bash
+# Install claude-bg to your PATH
+./scripts/install-claude-bg.sh
+```
 
 ### Usage:
 ```bash
 # Start orchestrator example in background
-./scripts/bg.sh start 'python examples/team_mcp_demo.py' team-demo
+claude-bg start 'python examples/team_mcp_demo.py' team-demo
 
 # Check status
-./scripts/bg.sh status team-demo_[timestamp]
+claude-bg status team-demo_[timestamp]
 
 # View logs
-./scripts/bg.sh logs team-demo_[timestamp]
+claude-bg logs team-demo_[timestamp]
 
 # Stop process
-./scripts/bg.sh stop team-demo_[timestamp]
+claude-bg stop team-demo_[timestamp]
 ```
 
 ## Common Commands

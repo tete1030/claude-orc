@@ -39,6 +39,11 @@ This orchestrator enables multiple Claude agents to work together by:
    pip install -r requirements.txt
    ```
 
+3. Install claude-bg (background process manager):
+   ```bash
+   ./scripts/install-claude-bg.sh
+   ```
+
 ## Quick Start
 
 ### Quick Example - Team Collaboration Demo

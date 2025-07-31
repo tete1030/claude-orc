@@ -1,8 +1,8 @@
 services:
   claude-code-env:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: docker/claude-code/Dockerfile
     image: ccbox:latest
     container_name: ${CONTAINER_NAME:-ccbox}
     hostname: ${CONTAINER_NAME:-ccbox}

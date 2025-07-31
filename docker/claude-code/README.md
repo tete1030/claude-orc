@@ -13,6 +13,7 @@ This Docker environment (CCBox - Claude Code Box) provides a complete developmen
 - **Development Tools**: git, vim, nano, build tools, sqlite3, GitHub CLI, Docker CLI, etc.
 - **Docker Access**: Full Docker access from within the container via socket mounting
 - **GitHub CLI**: Pre-installed for repository operations and GitHub integration
+- **claude-bg**: Background process manager pre-installed for managing long-running tasks
 
 ## Quick Start
 
@@ -305,6 +306,17 @@ Current limits are set to:
 Adjust in `docker-compose.claude-code.yml` if needed.
 
 ## New Tools Available
+
+### claude-bg (Background Process Manager)
+claude-bg is pre-installed for managing long-running processes:
+```bash
+# Inside container
+claude-bg start 'python long_script.py' my-job
+claude-bg list
+claude-bg status my-job_20250731_120000
+claude-bg logs my-job_20250731_120000
+claude-bg stop my-job_20250731_120000
+```
 
 ### SQLite3
 SQLite3 is now available in the container for database operations:
