@@ -97,8 +97,8 @@ dkcc run -i dev
 dkcc start -i frontend
 
 # Set model
-dkcc run -m claude-3-5-sonnet-20241022
-dkcc run -m sonnet  # Pass model name directly
+dkcc run -m sonnet
+dkcc run -m opus  # Pass model name directly
 
 # Set container mode
 dkcc run --isolated   # Isolated container mode
