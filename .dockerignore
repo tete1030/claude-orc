@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# Only include the three files we need
+!bin/
+!bin/claude-bg
+!bin/dkcc
+!docker/
+!docker/claude-code/
+!docker/claude-code/entrypoint.sh

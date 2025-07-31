@@ -28,9 +28,12 @@ orchestrator/
 │   ├── KNOWN_LIMITATIONS.md # Current limitations and workarounds
 │   └── research/            # Research findings and test results
 ├── examples/                 # Example orchestrator configurations
+├── bin/                      # Executable scripts
+│   ├── claude-bg             # Background process manager
+│   └── dkcc                  # Docker management script
 ├── scripts/                  # Utility scripts
-│   ├── claude-bg             # Background process manager (install into user or system path)
-│   ├── docker-claude-code.sh # Docker management script
+│   ├── install-claude-bg.sh  # Install claude-bg to PATH
+│   ├── install-dkcc.sh       # Install dkcc to PATH
 │   ├── diagnose_agent_states.py  # Agent state diagnostic tool
 │   └── monitor_live_states.py    # Live state monitoring tool
 ├── src/                      # Main source code
@@ -221,19 +224,38 @@ python scripts/monitor_live_states.py <session-name>
 python scripts/diagnose_agent_states.py <session-name> --duration 120
 ```
 
-### Docker Management
+### Docker Management (dkcc)
+
+#### Installation:
+```bash
+# Install dkcc to your PATH
+./scripts/install-dkcc.sh
+```
+
+#### Usage:
 ```bash
 # Build image
-./scripts/docker-claude-code.sh build
+dkcc build
 
-# Start container
-./scripts/docker-claude-code.sh start
+# Run Claude with options
+dkcc run -i dev -m sonnet
+dkcc run --isolated
 
-# Run Claude in container
-./scripts/docker-claude-code.sh run
+# Start persistent container
+dkcc start -i frontend
 
-# Multiple instances
-CLAUDE_INSTANCE=test1 ./scripts/docker-claude-code.sh start
+# Run Claude in existing container
+dkcc cc -i frontend
+dkcc cc -i frontend --help
+
+# Open shell
+dkcc shell -i frontend
+dkcc shell -i frontend python app.py
+
+# Other commands
+dkcc stop -i frontend    # Stop container
+dkcc logs -i frontend    # View logs
+dkcc list                # List all containers
 ```
 
 ## Known Issues and Solutions

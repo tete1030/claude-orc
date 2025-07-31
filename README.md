@@ -39,9 +39,13 @@ This orchestrator enables multiple Claude agents to work together by:
    pip install -r requirements.txt
    ```
 
-3. Install claude-bg (background process manager):
+3. Install utilities:
    ```bash
+   # Install claude-bg (background process manager)
    ./scripts/install-claude-bg.sh
+   
+   # Install dkcc (Docker Claude Code manager)
+   ./scripts/install-dkcc.sh
    ```
 
 ## Quick Start
@@ -199,13 +203,13 @@ The orchestrator includes CCBox (Claude Code Box) - a Docker environment for run
 ### Basic Usage
 ```bash
 # Build the Docker image
-./scripts/docker-claude-code.sh build
+dkcc build
 
 # Run Claude in temporary container
-./scripts/docker-claude-code.sh run
+dkcc run
 
 # Start persistent container
-./scripts/docker-claude-code.sh start
+dkcc start
 ```
 
 ### Custom Volume Mounts
@@ -217,7 +221,7 @@ MOUNT_DATA="/path/to/data:/mnt/data:ro"
 MOUNT_CACHE="/home/user/.cache:/workspace/.cache:cached"
 ```
 
-See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation.
+See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation and [docs/DKCC_USAGE.md](docs/DKCC_USAGE.md) for dkcc command reference.
 
 ## Troubleshooting
 

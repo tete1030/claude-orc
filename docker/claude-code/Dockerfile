@@ -170,8 +170,12 @@ RUN npm install -g @anthropic-ai/claude-code
 # Python virtual environment location will be set dynamically
 
 # Copy claude-bg for background process management
-COPY scripts/claude-bg /usr/local/bin/claude-bg
+COPY bin/claude-bg /usr/local/bin/claude-bg
 RUN chmod +x /usr/local/bin/claude-bg
+
+# Copy dkcc for Docker container management
+COPY bin/dkcc /usr/local/bin/dkcc
+RUN chmod +x /usr/local/bin/dkcc
 
 # Copy entrypoint script
 COPY docker/claude-code/entrypoint.sh /usr/local/bin/entrypoint.sh

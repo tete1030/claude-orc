@@ -11,7 +11,7 @@ class ClaudeLauncherConfig:
     """Centralized configuration for Claude launching"""
     
     # Base Docker script path
-    DOCKER_SCRIPT = "../scripts/docker-claude-code.sh"
+    DOCKER_SCRIPT = "dkcc"
     
     @classmethod
     def build_command(cls, agent_name: str, session_id: str, system_prompt: str, 

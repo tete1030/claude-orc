@@ -2,6 +2,8 @@
 
 This Docker environment (CCBox - Claude Code Box) provides a complete development environment for running Claude Code with all necessary dependencies.
 
+**Note**: The `dkcc` tool no longer uses docker-compose. All container management is done with pure Docker commands.
+
 ## Features
 
 - **Claude Code**: Pre-installed globally via npm
@@ -14,17 +16,18 @@ This Docker environment (CCBox - Claude Code Box) provides a complete developmen
 - **Docker Access**: Full Docker access from within the container via socket mounting
 - **GitHub CLI**: Pre-installed for repository operations and GitHub integration
 - **claude-bg**: Background process manager pre-installed for managing long-running tasks
+- **dkcc**: Docker container manager pre-installed for Docker-in-Docker operations
 
 ## Quick Start
 
 ### Option 1: Temporary Container (Recommended for Quick Tasks)
 ```bash
 # Run Claude Code directly in temporary container (with venv auto-sourced)
-./scripts/docker-claude-code.sh run
+dkcc run
 # This creates a temporary container that runs: claude --dangerously-skip-permissions
 
 # Or run interactive bash shell
-./scripts/docker-claude-code.sh run-bash
+dkcc run-bash
 
 # Or use Docker directly
 docker run --rm -it \
@@ -41,48 +44,48 @@ docker run --rm -it \
 ### Option 2: Persistent Container
 ```bash
 # Build the Docker image (only needed once)
-./scripts/docker-claude-code.sh build
+dkcc build
 
 # Start a persistent container
-./scripts/docker-claude-code.sh start
+dkcc start
 
 # Access the container with shell
-./scripts/docker-claude-code.sh shell
+dkcc shell
 
 # Or run Claude directly (default for exec)
-./scripts/docker-claude-code.sh exec
+dkcc exec
 ```
 
 ### Option 3: Multiple Named Instances
 ```bash
 # Run multiple instances for different projects
-CLAUDE_INSTANCE=project1 ./scripts/docker-claude-code.sh start
-CLAUDE_INSTANCE=project2 ./scripts/docker-claude-code.sh start
+CLAUDE_INSTANCE=project1 dkcc start
+CLAUDE_INSTANCE=project2 dkcc start
 
 # Access specific instance
-CLAUDE_INSTANCE=project1 ./scripts/docker-claude-code.sh shell
+CLAUDE_INSTANCE=project1 dkcc shell
 
 # List all instances
-./scripts/docker-claude-code.sh list
+dkcc list
 ```
 
 ### Option 4: Containers with Random Suffix
 ```bash
 # Create container with random 8-character suffix
-./scripts/docker-claude-code.sh --random start
+dkcc --random start
 # Creates: ccbox-a1b2c3d4
 
 # Named instance with random suffix
-CLAUDE_INSTANCE=dev ./scripts/docker-claude-code.sh --random start
+CLAUDE_INSTANCE=dev dkcc --random start
 # Creates: ccbox-dev-x9y8z7w6
 
 # Always use random suffix via environment variable
 export CLAUDE_INSTANCE_RANDOM=true
-./scripts/docker-claude-code.sh start
+dkcc start
 # Creates: ccbox-m3n4o5p6
 
 # Use with specific instance name
-CLAUDE_INSTANCE=test CLAUDE_INSTANCE_RANDOM=true ./scripts/docker-claude-code.sh start
+CLAUDE_INSTANCE=test CLAUDE_INSTANCE_RANDOM=true dkcc start
 # Creates: ccbox-test-q1r2s3t4
 ```
 
@@ -161,7 +164,7 @@ To set any Claude Code environment variable, export it before running the contai
 export ANTHROPIC_API_KEY=your-key-here
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
 export DISABLE_TELEMETRY=true
-./scripts/docker-claude-code.sh run
+dkcc run
 ```
 
 For persistent settings, add them to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.)
@@ -206,37 +209,37 @@ npm run dev
 
 ### Check Container Status
 ```bash
-./scripts/docker-claude-code.sh status
+dkcc status
 ```
 
 ### View Logs
 ```bash
-./scripts/docker-claude-code.sh logs
+dkcc logs
 ```
 
 ### Execute Command Without Shell
 ```bash
 # Run Claude Code (default when no command specified)
-./scripts/docker-claude-code.sh exec
+dkcc exec
 
 # Or run specific commands
-./scripts/docker-claude-code.sh exec python --version
-./scripts/docker-claude-code.sh exec npm --version
+dkcc exec python --version
+dkcc exec npm --version
 ```
 
 ### Restart Container
 ```bash
-./scripts/docker-claude-code.sh restart
+dkcc restart
 ```
 
 ### Stop Container
 ```bash
-./scripts/docker-claude-code.sh stop
+dkcc stop
 ```
 
 ### Clean Up (WARNING: Removes volumes)
 ```bash
-./scripts/docker-claude-code.sh clean
+dkcc clean
 ```
 
 ## Troubleshooting
@@ -268,11 +271,12 @@ npm install
 ### Adding API Keys
 To add your Anthropic API key:
 ```bash
-# Option 1: Add to docker-compose.claude-code.yml environment section
-ANTHROPIC_API_KEY: your-key-here
+# Export before running container
+export ANTHROPIC_API_KEY=your-key-here
+dkcc run
 
-# Option 2: Use .env file
-echo "ANTHROPIC_API_KEY=your-key-here" >> .env
+# Or add to your shell profile for persistence
+echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc
 ```
 
 ### Working with Custom Mounts
@@ -291,7 +295,7 @@ MOUNT_CACHE="/home/$USER/.mycache:/workspace/.cache:cached"
 EOF
 
 # Run container - mounts are automatically applied
-./scripts/docker-claude-code.sh run
+dkcc run
 
 # Inside container, access your mounted data
 ls /mnt/data/
@@ -299,11 +303,14 @@ ls /workspace/.cache/
 ```
 
 ### Resource Limits
-Current limits are set to:
-- CPU: 4 cores max, 2 cores reserved
-- Memory: 8GB max, 4GB reserved
-
-Adjust in `docker-compose.claude-code.yml` if needed.
+By default, containers have no explicit resource limits. To add limits, use Docker flags when running:
+```bash
+# With resource limits
+docker run -d --name ccbox \
+    --memory="8g" --memory-reservation="4g" \
+    --cpus="4" --cpu-shares="512" \
+    # ... other options
+```
 
 ## New Tools Available
 
@@ -317,6 +324,18 @@ claude-bg status my-job_20250731_120000
 claude-bg logs my-job_20250731_120000
 claude-bg stop my-job_20250731_120000
 ```
+
+### dkcc (Docker Claude Code Manager)
+dkcc is pre-installed for managing nested Docker containers:
+```bash
+# Inside container (Docker-in-Docker)
+dkcc build        # Build another CCBox image
+dkcc run          # Run nested container
+dkcc start        # Start nested persistent container
+dkcc exec bash    # Execute in nested container
+```
+
+Note: Use with caution when nesting containers.
 
 ### SQLite3
 SQLite3 is now available in the container for database operations:

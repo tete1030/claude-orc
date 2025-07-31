@@ -1,0 +1,639 @@
+#!/bin/bash
+
+# Docker Claude Code Environment Management Script
+
+set -e
+
+# Check if we're running from source or installed location
+SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+# Image configuration
+IMAGE_NAME="ccbox:latest"
+DEFAULT_CONTAINER_NAME="ccbox"
+
+# Parse command line options
+INSTANCE_NAME="${CLAUDE_INSTANCE:-}"
+MODEL_NAME="${ANTHROPIC_MODEL:-}"
+CONTAINER_MODE="${CLAUDE_CONTAINER_MODE:-}"
+PARSED_ARGS=()
+
+# Function to parse options
+parse_options() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -i|--instance)
+                INSTANCE_NAME="$2"
+                shift 2
+                ;;
+            -m|--model)
+                MODEL_NAME="$2"
+                shift 2
+                ;;
+            --isolated)
+                CONTAINER_MODE="isolated"
+                shift
+                ;;
+            --shared)
+                CONTAINER_MODE="shared"
+                shift
+                ;;
+            --random)
+                # Generate 8-character random string (alphanumeric)
+                RANDOM_SUFFIX=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 8 || true)
+                if [ -z "$RANDOM_SUFFIX" ]; then
+                    # Fallback to date-based suffix if urandom fails
+                    RANDOM_SUFFIX=$(date +%s | tail -c 8)
+                fi
+                
+                if [ -n "$INSTANCE_NAME" ]; then
+                    INSTANCE_NAME="${INSTANCE_NAME}-${RANDOM_SUFFIX}"
+                else
+                    INSTANCE_NAME="${RANDOM_SUFFIX}"
+                fi
+                shift
+                ;;
+            *)
+                PARSED_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+}
+
+# Parse all arguments
+parse_options "$@"
+
+# Export parsed values
+[ -n "$INSTANCE_NAME" ] && export CLAUDE_INSTANCE="$INSTANCE_NAME"
+[ -n "$MODEL_NAME" ] && export ANTHROPIC_MODEL="$MODEL_NAME"
+[ -n "$CONTAINER_MODE" ] && export CLAUDE_CONTAINER_MODE="$CONTAINER_MODE"
+
+# Set container name based on instance
+if [ -n "$INSTANCE_NAME" ]; then
+    CONTAINER_NAME="${DEFAULT_CONTAINER_NAME}-${INSTANCE_NAME}"
+else
+    CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+fi
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+print_usage() {
+    echo "Usage: $0 [OPTIONS] {build|start|stop|restart|run|run-shell|cc|shell|logs|status|list|clean}"
+    echo ""
+    echo "Commands:"
+    echo "  build      - Build the Docker image (only needed once)"
+    echo "  start      - Start a persistent container"
+    echo "  stop       - Stop the container"
+    echo "  restart    - Restart the container"
+    echo "  run        - Run Claude Code in a new temporary container (auto-removes on exit)"
+    echo "  run-shell  - Run interactive shell in a new temporary container (auto-removes on exit)"
+    echo "  cc         - Run Claude Code in existing container (or pass other commands)"
+    echo "  shell      - Open an interactive bash shell in the container"
+    echo "  logs       - Show container logs"
+    echo "  status     - Show container status"
+    echo "  list       - List all Claude Code containers"
+    echo "  clean      - Remove container and volumes (WARNING: deletes data)"
+    echo "              Usage: clean [filter] - With filter, removes all matching containers"
+    echo ""
+    echo "Options:"
+    echo "  -i, --instance <name>  - Set instance name (e.g., dev, test, prod)"
+    echo "  -m, --model <model>    - Set model (e.g., claude-3-5-sonnet-20241022, sonnet, opus)"
+    echo "  --isolated             - Use isolated container mode"
+    echo "  --shared               - Use shared container mode"
+    echo "  --random               - Add random suffix to container name"
+    echo ""
+    echo "Examples:"
+    echo "  # Run Claude with specific model in dev instance"
+    echo "  $0 run -i dev -m claude-3-5-sonnet-20241022"
+    echo "  # Start isolated container for testing"
+    echo "  $0 start -i test --isolated"
+    echo "  # Open shell in specific instance"
+    echo "  $0 shell -i frontend"
+    echo "  # Run Claude in existing container with extra args"
+    echo "  $0 cc -i backend --help"
+    echo "  # Multiple instances"
+    echo "  $0 start -i frontend -m sonnet"
+    echo "  $0 start -i backend -m opus"
+}
+
+print_status() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# Check if docker and docker compose are installed
+check_dependencies() {
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed"
+        exit 1
+    fi
+    
+    if ! docker compose version &> /dev/null; then
+        print_error "Docker Compose is not installed"
+        exit 1
+    fi
+}
+
+# Check if image exists
+image_exists() {
+    docker image inspect "$IMAGE_NAME" >/dev/null 2>&1
+}
+
+# Build common docker run arguments
+build_docker_env_args() {
+    local env_args=""
+    
+    # Claude Code API settings
+    [[ -n "$ANTHROPIC_API_KEY" ]] && env_args="$env_args -e ANTHROPIC_API_KEY"
+    [[ -n "$ANTHROPIC_AUTH_TOKEN" ]] && env_args="$env_args -e ANTHROPIC_AUTH_TOKEN"
+    [[ -n "$ANTHROPIC_CUSTOM_HEADERS" ]] && env_args="$env_args -e ANTHROPIC_CUSTOM_HEADERS"
+    [[ -n "$ANTHROPIC_MODEL" ]] && env_args="$env_args -e ANTHROPIC_MODEL"
+    [[ -n "$ANTHROPIC_SMALL_FAST_MODEL" ]] && env_args="$env_args -e ANTHROPIC_SMALL_FAST_MODEL"
+    [[ -n "$ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION" ]] && env_args="$env_args -e ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION"
+    [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]] && env_args="$env_args -e AWS_BEARER_TOKEN_BEDROCK"
+    
+    # Claude Code behavior settings
+    [[ -n "$BASH_DEFAULT_TIMEOUT_MS" ]] && env_args="$env_args -e BASH_DEFAULT_TIMEOUT_MS"
+    [[ -n "$BASH_MAX_TIMEOUT_MS" ]] && env_args="$env_args -e BASH_MAX_TIMEOUT_MS"
+    [[ -n "$BASH_MAX_OUTPUT_LENGTH" ]] && env_args="$env_args -e BASH_MAX_OUTPUT_LENGTH"
+    [[ -n "$CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR" ]] && env_args="$env_args -e CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR"
+    [[ -n "$CLAUDE_CODE_API_KEY_HELPER_TTL_MS" ]] && env_args="$env_args -e CLAUDE_CODE_API_KEY_HELPER_TTL_MS"
+    [[ -n "$CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL" ]] && env_args="$env_args -e CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL"
+    [[ -n "$CLAUDE_CODE_MAX_OUTPUT_TOKENS" ]] && env_args="$env_args -e CLAUDE_CODE_MAX_OUTPUT_TOKENS"
+    [[ -n "$CLAUDE_CODE_SSE_PORT" ]] && env_args="$env_args -e CLAUDE_CODE_SSE_PORT"
+    [[ -n "$CLAUDE_CODE_USE_BEDROCK" ]] && env_args="$env_args -e CLAUDE_CODE_USE_BEDROCK"
+    [[ -n "$CLAUDE_CODE_USE_VERTEX" ]] && env_args="$env_args -e CLAUDE_CODE_USE_VERTEX"
+    [[ -n "$CLAUDE_CODE_SKIP_BEDROCK_AUTH" ]] && env_args="$env_args -e CLAUDE_CODE_SKIP_BEDROCK_AUTH"
+    [[ -n "$CLAUDE_CODE_SKIP_VERTEX_AUTH" ]] && env_args="$env_args -e CLAUDE_CODE_SKIP_VERTEX_AUTH"
+    
+    # Claude Code feature toggles
+    [[ -n "$CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" ]] && env_args="$env_args -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+    [[ -n "$CLAUDE_CODE_DISABLE_TERMINAL_TITLE" ]] && env_args="$env_args -e CLAUDE_CODE_DISABLE_TERMINAL_TITLE"
+    [[ -n "$DISABLE_AUTOUPDATER" ]] && env_args="$env_args -e DISABLE_AUTOUPDATER"
+    [[ -n "$DISABLE_BUG_COMMAND" ]] && env_args="$env_args -e DISABLE_BUG_COMMAND"
+    [[ -n "$DISABLE_COST_WARNINGS" ]] && env_args="$env_args -e DISABLE_COST_WARNINGS"
+    [[ -n "$DISABLE_ERROR_REPORTING" ]] && env_args="$env_args -e DISABLE_ERROR_REPORTING"
+    [[ -n "$DISABLE_NON_ESSENTIAL_MODEL_CALLS" ]] && env_args="$env_args -e DISABLE_NON_ESSENTIAL_MODEL_CALLS"
+    [[ -n "$DISABLE_TELEMETRY" ]] && env_args="$env_args -e DISABLE_TELEMETRY"
+    
+    # Proxy settings
+    [[ -n "$HTTP_PROXY" ]] && env_args="$env_args -e HTTP_PROXY"
+    [[ -n "$HTTPS_PROXY" ]] && env_args="$env_args -e HTTPS_PROXY"
+    
+    # Model token settings
+    [[ -n "$MAX_THINKING_TOKENS" ]] && env_args="$env_args -e MAX_THINKING_TOKENS"
+    [[ -n "$MCP_TIMEOUT" ]] && env_args="$env_args -e MCP_TIMEOUT"
+    [[ -n "$MCP_TOOL_TIMEOUT" ]] && env_args="$env_args -e MCP_TOOL_TIMEOUT"
+    [[ -n "$MAX_MCP_OUTPUT_TOKENS" ]] && env_args="$env_args -e MAX_MCP_OUTPUT_TOKENS"
+    
+    # Vertex region settings
+    [[ -n "$VERTEX_REGION_CLAUDE_3_5_HAIKU" ]] && env_args="$env_args -e VERTEX_REGION_CLAUDE_3_5_HAIKU"
+    [[ -n "$VERTEX_REGION_CLAUDE_3_5_SONNET" ]] && env_args="$env_args -e VERTEX_REGION_CLAUDE_3_5_SONNET"
+    [[ -n "$VERTEX_REGION_CLAUDE_3_7_SONNET" ]] && env_args="$env_args -e VERTEX_REGION_CLAUDE_3_7_SONNET"
+    [[ -n "$VERTEX_REGION_CLAUDE_4_0_OPUS" ]] && env_args="$env_args -e VERTEX_REGION_CLAUDE_4_0_OPUS"
+    [[ -n "$VERTEX_REGION_CLAUDE_4_0_SONNET" ]] && env_args="$env_args -e VERTEX_REGION_CLAUDE_4_0_SONNET"
+    
+    # Claude configuration mode
+    [[ -n "$CLAUDE_CONTAINER_MODE" ]] && env_args="$env_args -e CLAUDE_CONTAINER_MODE"
+    
+    echo "$env_args"
+}
+
+# Load custom mounts from .ccbox.env
+load_custom_mounts() {
+    local workspace_path="$1"
+    local custom_mounts=""
+    
+    if [[ -f "$workspace_path/.ccbox.env" ]]; then
+        print_status "Loading custom mounts from .ccbox.env"
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Skip comments and empty lines
+            if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ -n "$line" ]]; then
+                # Parse MOUNT_* variables
+                if [[ "$line" =~ ^MOUNT_[A-Z0-9_]+=(.+)$ ]]; then
+                    mount_spec="${BASH_REMATCH[1]}"
+                    # Remove quotes if present
+                    mount_spec="${mount_spec%\"}"
+                    mount_spec="${mount_spec#\"}"
+                    custom_mounts="$custom_mounts -v $mount_spec"
+                fi
+            fi
+        done < "$workspace_path/.ccbox.env"
+    fi
+    
+    echo "$custom_mounts"
+}
+
+# Build common volume mount arguments
+build_volume_args() {
+    local workspace_path="$1"
+    local volume_args=""
+    
+    volume_args="$volume_args -v $workspace_path:$workspace_path"
+    volume_args="$volume_args -v $HOME/.claude:$HOME/.claude-host/.claude"
+    volume_args="$volume_args -v $HOME/.claude.json:$HOME/.claude-host/.claude.json"
+    volume_args="$volume_args -v $HOME/.gitconfig:$HOME/.gitconfig:ro"
+    volume_args="$volume_args -v $HOME/.ssh:$HOME/.ssh:ro"
+    volume_args="$volume_args -v $HOME/.cache/ms-playwright:$HOME/.cache/ms-playwright:cached"
+    volume_args="$volume_args -v /var/run/docker.sock:/var/run/docker.sock"
+    volume_args="$volume_args -v $HOME/.config/gh:$HOME/.config/gh:ro"
+    volume_args="$volume_args -v /tmp/claude-orc:/tmp/claude-orc"
+    
+    echo "$volume_args"
+}
+
+# Build the Docker image
+build_image() {
+    # Check if Dockerfile exists in expected location
+    local dockerfile_path="$SCRIPT_DIR/../docker/claude-code/Dockerfile"
+    local repo_root="$SCRIPT_DIR/.."
+    
+    if [[ ! -f "$dockerfile_path" ]]; then
+        print_error "Build command must be run from the orchestrator repository"
+        print_error "Dockerfile not found at: $dockerfile_path"
+        print_error "Please clone the repository and run build from there"
+        exit 1
+    fi
+    
+    print_status "Building Claude Code Docker image..."
+    # Use repository root as build context and specify Dockerfile path
+    docker build -t "$IMAGE_NAME" -f "$dockerfile_path" "$repo_root"
+    print_status "Build completed successfully"
+}
+
+# Start the container
+start_container() {
+    # Check if image exists
+    if ! image_exists; then
+        print_error "Docker image 'ccbox:latest' not found"
+        print_error "Please build the image first by running:"
+        print_error "  1. Clone the orchestrator repository"
+        print_error "  2. Run: ./bin/dkcc build"
+        exit 1
+    fi
+    
+    # Check if container already exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_warning "Container '${CONTAINER_NAME}' already exists"
+        print_status "Starting existing container..."
+        docker start "$CONTAINER_NAME"
+        print_status "Container '${CONTAINER_NAME}' started"
+        return
+    fi
+    
+    print_status "Creating and starting Claude Code container '${CONTAINER_NAME}'..."
+    
+    # Get current workspace path
+    local workspace_path="$(pwd)"
+    
+    # Build arguments
+    local env_args=$(build_docker_env_args)
+    local volume_args=$(build_volume_args "$workspace_path")
+    local custom_mounts=$(load_custom_mounts "$workspace_path")
+    
+    # Create and start container
+    docker run -d \
+        --name "$CONTAINER_NAME" \
+        --init \
+        -e LOCAL_USER_ID=$(id -u) \
+        -e LOCAL_GROUP_ID=$(id -g) \
+        -e LOCAL_USER_NAME=$USER \
+        -e LOCAL_USER_HOME=$HOME \
+        -e WORKSPACE_PATH=$workspace_path \
+        -e PYTHONPATH=$workspace_path \
+        -e TERM=xterm-256color \
+        $env_args \
+        $volume_args \
+        $custom_mounts \
+        -w "$workspace_path" \
+        --network host \
+        "$IMAGE_NAME" \
+        tail -f /dev/null  # Keep container running
+    
+    print_status "Container '${CONTAINER_NAME}' started successfully"
+    print_status "You can now access the container with: $0 shell"
+    if [ -n "$INSTANCE_NAME" ]; then
+        print_status "Instance: ${INSTANCE_NAME}"
+    fi
+}
+
+# Stop the container
+stop_container() {
+    print_status "Stopping Claude Code container '${CONTAINER_NAME}'..."
+    docker stop "$CONTAINER_NAME" 2>/dev/null || {
+        print_warning "Container '${CONTAINER_NAME}' is not running"
+    }
+    print_status "Container stopped"
+}
+
+# Restart the container
+restart_container() {
+    stop_container
+    start_container
+}
+
+# Open shell in container
+exec_shell() {
+    # Remove 'shell' from arguments
+    local args=("${PARSED_ARGS[@]:1}")
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_error "Container '${CONTAINER_NAME}' is not running"
+        print_status "Start it with: $0 start"
+        exit 1
+    fi
+    
+    if [ ${#args[@]} -eq 0 ]; then
+        # No args, open interactive bash shell
+        print_status "Opening bash shell in container '${CONTAINER_NAME}'..."
+        docker exec -it \
+            -e LOCAL_USER_ID=$(id -u) \
+            -e LOCAL_GROUP_ID=$(id -g) \
+            -e LOCAL_USER_NAME=$USER \
+            -e LOCAL_USER_HOME=$HOME \
+            "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh /bin/bash
+    else
+        # Execute the provided command
+        print_status "Executing command in container: ${args[@]}"
+        docker exec -it \
+            -e LOCAL_USER_ID=$(id -u) \
+            -e LOCAL_GROUP_ID=$(id -g) \
+            -e LOCAL_USER_NAME=$USER \
+            -e LOCAL_USER_HOME=$HOME \
+            "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh "${args[@]}"
+    fi
+}
+
+# Run temporary container
+run_temporary() {
+    # Remove 'run' from arguments
+    local args=("${PARSED_ARGS[@]:1}")
+
+    # Check if image exists
+    if ! image_exists; then
+        print_error "Docker image 'ccbox:latest' not found"
+        print_error "Please build the image first by running:"
+        print_error "  1. Clone the orchestrator repository"
+        print_error "  2. Run: ./bin/dkcc build"
+        exit 1
+    fi
+    
+    print_status "Running temporary Claude Code container (will auto-remove on exit)..."
+    
+    # Get current workspace path
+    local workspace_path="$(pwd)"
+    
+    # Build arguments
+    local env_args=$(build_docker_env_args)
+    local volume_args=$(build_volume_args "$workspace_path")
+    local custom_mounts=$(load_custom_mounts "$workspace_path")
+    
+    docker run --rm -it --init \
+        --name "$CONTAINER_NAME-temp-$$" \
+        -e LOCAL_USER_ID=$(id -u) \
+        -e LOCAL_GROUP_ID=$(id -g) \
+        -e LOCAL_USER_NAME=$USER \
+        -e LOCAL_USER_HOME=$HOME \
+        -e WORKSPACE_PATH=$workspace_path \
+        -e PYTHONPATH=$workspace_path \
+        -e TERM=xterm-256color \
+        $env_args \
+        $volume_args \
+        $custom_mounts \
+        -w "$workspace_path" \
+        --network host \
+        "$IMAGE_NAME" \
+        claude --dangerously-skip-permissions "${args[@]}"
+}
+
+# Run temporary container with bash
+run_shell() {
+    # Check if image exists
+    if ! image_exists; then
+        print_error "Docker image 'ccbox:latest' not found"
+        print_error "Please build the image first by running:"
+        print_error "  1. Clone the orchestrator repository"
+        print_error "  2. Run: ./bin/dkcc build"
+        exit 1
+    fi
+    
+    print_status "Running temporary Claude Code container with bash (will auto-remove on exit)..."
+    
+    # Get current workspace path
+    local workspace_path="$(pwd)"
+    
+    # Build arguments
+    local env_args=$(build_docker_env_args)
+    local volume_args=$(build_volume_args "$workspace_path")
+    local custom_mounts=$(load_custom_mounts "$workspace_path")
+    
+    docker run --rm -it --init \
+        --name "$CONTAINER_NAME-bash-$$" \
+        -e LOCAL_USER_ID=$(id -u) \
+        -e LOCAL_GROUP_ID=$(id -g) \
+        -e LOCAL_USER_NAME=$USER \
+        -e LOCAL_USER_HOME=$HOME \
+        -e WORKSPACE_PATH=$workspace_path \
+        -e PYTHONPATH=$workspace_path \
+        -e TERM=xterm-256color \
+        $env_args \
+        $volume_args \
+        $custom_mounts \
+        -w "$workspace_path" \
+        --network host \
+        "$IMAGE_NAME" \
+        /bin/bash
+}
+
+# Execute command in container
+claude_code() {
+    # Remove the first element from PARSED_ARGS (which is 'cc')
+    local args=("${PARSED_ARGS[@]:1}")
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_error "Container '${CONTAINER_NAME}' is not running"
+        print_status "Start it with: $0 start"
+        exit 1
+    fi
+    
+    print_status "Starting Claude Code in container..."
+    
+    # Pass user environment to exec command
+    docker exec -it \
+        -e LOCAL_USER_ID=$(id -u) \
+        -e LOCAL_GROUP_ID=$(id -g) \
+        -e LOCAL_USER_NAME=$USER \
+        -e LOCAL_USER_HOME=$HOME \
+        "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh claude --dangerously-skip-permissions "${args[@]}"
+}
+
+# Show logs
+show_logs() {
+    print_status "Showing logs for container '${CONTAINER_NAME}'..."
+    docker logs -f "$CONTAINER_NAME" 2>&1 || {
+        print_error "Container '${CONTAINER_NAME}' not found"
+        exit 1
+    }
+}
+
+# Show status
+show_status() {
+    print_status "Container status for '${CONTAINER_NAME}':"
+    docker ps -a --filter "name=^${CONTAINER_NAME}$" --format "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
+}
+
+# List all Claude Code containers
+list_containers() {
+    print_status "All Claude Code containers:"
+    
+    # Get container information
+    local containers=$(docker ps -a --filter "name=ccbox" --format "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}")
+    
+    if [ -z "$containers" ]; then
+        echo "No Claude Code containers found."
+        return
+    fi
+    
+    # Print header
+    printf "%-20s %-30s %-25s %-20s\n" "INSTANCE" "CONTAINER NAME" "STATUS" "CREATED"
+    printf "%-20s %-30s %-25s %-20s\n" "--------" "--------------" "------" "-------"
+    
+    # Process each container
+    while IFS=$'\t' read -r name status created; do
+        # Extract instance name from container name
+        local instance=""
+        if [[ "$name" == "$DEFAULT_CONTAINER_NAME" ]]; then
+            instance="(default)"
+        elif [[ "$name" =~ ^${DEFAULT_CONTAINER_NAME}-(.+)$ ]]; then
+            instance="${BASH_REMATCH[1]}"
+        else
+            instance="(unknown)"
+        fi
+        
+        # Format status (remove "Up" or "Exited" prefix for cleaner display)
+        local short_status=$(echo "$status" | sed -E 's/^(Up|Exited) //')
+        
+        # Print formatted line
+        printf "%-20s %-30s %-25s %-20s\n" "$instance" "$name" "$short_status" "$created"
+    done <<< "$containers"
+}
+
+# Clean up
+clean_up() {
+    # Get filter from PARSED_ARGS instead of $2
+    local filter=""
+    if [ ${#PARSED_ARGS[@]} -gt 1 ]; then
+        filter="${PARSED_ARGS[1]}"
+    fi
+    
+    # Check if a filter was provided
+    if [ -n "$filter" ]; then
+        # Batch clean with filter
+        print_status "Finding Claude Code containers matching filter: '$filter'"
+        
+        # Get matching containers
+        local containers=$(docker ps -a --filter "name=ccbox" --format "{{.Names}}" | grep "$filter")
+        
+        if [ -z "$containers" ]; then
+            print_warning "No containers found matching filter: '$filter'"
+            return
+        fi
+        
+        # Show containers that will be removed
+        echo "The following containers will be removed:"
+        echo "$containers" | while read -r container; do
+            echo "  - $container"
+        done
+        
+        read -p "Are you sure you want to remove these containers? (y/N) " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "$containers" | while read -r container; do
+                print_status "Removing container: $container"
+                docker rm -f "$container" 2>/dev/null || true
+            done
+            print_status "Batch cleanup completed"
+        else
+            print_status "Cleanup cancelled"
+        fi
+    else
+        # Single container clean
+        print_warning "This will remove the container '${CONTAINER_NAME}'!"
+        read -p "Are you sure? (y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_status "Cleaning up..."
+            docker rm -f "$CONTAINER_NAME" 2>/dev/null || {
+                print_warning "Container '${CONTAINER_NAME}' not found"
+            }
+            print_status "Cleanup completed"
+        else
+            print_status "Cleanup cancelled"
+        fi
+    fi
+}
+
+# Main script logic
+check_dependencies
+
+# Get the command from PARSED_ARGS
+COMMAND="${PARSED_ARGS[0]}"
+
+case "$COMMAND" in
+    build)
+        build_image
+        ;;
+    start)
+        start_container
+        ;;
+    stop)
+        stop_container
+        ;;
+    restart)
+        restart_container
+        ;;
+    shell)
+        exec_shell
+        ;;
+    run)
+        run_temporary "${PARSED_ARGS[@]}"
+        ;;
+    run-shell)
+        run_shell
+        ;;
+    cc)
+        claude_code
+        ;;
+    logs)
+        show_logs
+        ;;
+    status)
+        show_status
+        ;;
+    list)
+        list_containers
+        ;;
+    clean)
+        clean_up
+        ;;
+    *)
+        print_usage
+        exit 1
+        ;;
+esac

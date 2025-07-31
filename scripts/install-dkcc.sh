@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Install script for claude-bg (background process manager)
+# Install script for dkcc (Docker Claude Code)
 
 set -e
 
@@ -24,11 +24,12 @@ print_warning() {
 
 # Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SOURCE_FILE="$SCRIPT_DIR/../bin/claude-bg"
+SOURCE_FILE="$SCRIPT_DIR/../bin/dkcc"
 
 # Check if source file exists
 if [ ! -f "$SOURCE_FILE" ]; then
     print_error "Source file not found: $SOURCE_FILE"
+    print_error "Please ensure dkcc script exists in the scripts directory"
     exit 1
 fi
 
@@ -54,23 +55,23 @@ else
     fi
 fi
 
-TARGET_FILE="$INSTALL_DIR/claude-bg"
+TARGET_FILE="$INSTALL_DIR/dkcc"
 
 # Copy the script
-print_status "Installing claude-bg to $INSTALL_DIR"
+print_status "Installing dkcc to $INSTALL_DIR"
 cp "$SOURCE_FILE" "$TARGET_FILE"
 chmod +x "$TARGET_FILE"
 
 # Verify installation
 if [ -f "$TARGET_FILE" ] && [ -x "$TARGET_FILE" ]; then
-    print_status "Successfully installed claude-bg to $TARGET_FILE"
+    print_status "Successfully installed dkcc to $TARGET_FILE"
     
     # Test if it's accessible
-    if command -v claude-bg >/dev/null 2>&1; then
-        print_status "claude-bg is now available in your PATH"
-        print_status "You can now use 'claude-bg'"
+    if command -v dkcc >/dev/null 2>&1; then
+        print_status "dkcc is now available in your PATH"
+        print_status "You can now use 'dkcc' instead of './scripts/dkcc'"
     else
-        print_warning "claude-bg installed but not yet in PATH"
+        print_warning "dkcc installed but not yet in PATH"
         print_warning "Please restart your shell or run: source ~/.bashrc"
     fi
 else
@@ -79,4 +80,5 @@ else
 fi
 
 print_status "Installation complete!"
-print_status "Usage: claude-bg {start|stop|status|list|logs|follow|kill-all} ..."
+print_status "Usage: dkcc {build|run|run-bash|start|stop|status|logs|restart|rm|exec} ..."
+print_status "Run 'dkcc --help' for more information"
