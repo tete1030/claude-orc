@@ -1,0 +1,145 @@
+services:
+  claude-code-env:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ccbox:latest
+    container_name: ${CONTAINER_NAME:-ccbox}
+    hostname: ${CONTAINER_NAME:-ccbox}
+    
+    # Mount necessary volumes
+    volumes:
+      # Mount the workspace at the same path as host
+      - ${WORKSPACE_PATH}:${WORKSPACE_PATH}
+      
+      # Additional mounts can be defined in .ccbox.env
+      # Example: CCBOX_MOUNT_DATA=/path/to/data:/mnt/data:ro
+      
+      # Mount only necessary config files to host-specific directory
+      - ~/.claude:${HOME}/.claude-host/.claude
+      - ~/.claude.json:${HOME}/.claude-host/.claude.json
+      - ~/.gitconfig:${HOME}/.gitconfig:ro
+      - ~/.ssh:${HOME}/.ssh:ro
+      - ~/.config/gh:${HOME}/.config/gh:ro
+      
+      # Docker socket for Docker-in-Docker operations
+      - /var/run/docker.sock:/var/run/docker.sock
+      
+      # Share Playwright browsers cache between host and container
+      - ~/.cache/ms-playwright:${HOME}/.cache/ms-playwright:cached
+      
+      # Share orchestrator temp directory
+      - /tmp/claude-orc:/tmp/claude-orc
+    
+    # Environment variables
+    environment:
+      # User mapping
+      LOCAL_USER_ID: ${USER_UID:-1000}
+      LOCAL_GROUP_ID: ${USER_GID:-1000}
+      LOCAL_USER_NAME: ${USER:-developer}
+      LOCAL_USER_HOME: ${HOME:-/home/developer}
+      
+      # Workspace path
+      WORKSPACE_PATH: ${WORKSPACE_PATH}
+      
+      # Claude configuration mode: "shared" (default) or "isolated"
+      CLAUDE_CONTAINER_MODE: ${CLAUDE_CONTAINER_MODE:-shared}
+      
+      # Python environment
+      PYTHONPATH: ${WORKSPACE_PATH}
+      # VIRTUAL_ENV and PATH are set dynamically by entrypoint.sh based on Poetry env
+      
+      # Timezone settings
+      TZ: UTC
+      
+      # Terminal settings for proper color support
+      TERM: xterm-256color
+      
+      # Development settings
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+      
+      # Node.js settings
+      NODE_ENV: development
+      
+      # Display for GUI applications (if needed)
+      DISPLAY: ${DISPLAY:-:0}
+      
+      # Claude Code API settings
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
+      ANTHROPIC_CUSTOM_HEADERS: ${ANTHROPIC_CUSTOM_HEADERS:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ANTHROPIC_SMALL_FAST_MODEL: ${ANTHROPIC_SMALL_FAST_MODEL:-}
+      ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION: ${ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION:-}
+      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
+      
+      # Claude Code behavior settings
+      BASH_DEFAULT_TIMEOUT_MS: ${BASH_DEFAULT_TIMEOUT_MS:-}
+      BASH_MAX_TIMEOUT_MS: ${BASH_MAX_TIMEOUT_MS:-}
+      BASH_MAX_OUTPUT_LENGTH: ${BASH_MAX_OUTPUT_LENGTH:-}
+      CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: ${CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR:-}
+      CLAUDE_CODE_API_KEY_HELPER_TTL_MS: ${CLAUDE_CODE_API_KEY_HELPER_TTL_MS:-}
+      CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: ${CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL:-}
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: ${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-}
+      CLAUDE_CODE_SSE_PORT: ${CLAUDE_CODE_SSE_PORT:-}
+      CLAUDE_CODE_USE_BEDROCK: ${CLAUDE_CODE_USE_BEDROCK:-}
+      CLAUDE_CODE_USE_VERTEX: ${CLAUDE_CODE_USE_VERTEX:-}
+      CLAUDE_CODE_SKIP_BEDROCK_AUTH: ${CLAUDE_CODE_SKIP_BEDROCK_AUTH:-}
+      CLAUDE_CODE_SKIP_VERTEX_AUTH: ${CLAUDE_CODE_SKIP_VERTEX_AUTH:-}
+      
+      # Claude Code feature toggles
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: ${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-}
+      CLAUDE_CODE_DISABLE_TERMINAL_TITLE: ${CLAUDE_CODE_DISABLE_TERMINAL_TITLE:-}
+      DISABLE_AUTOUPDATER: ${DISABLE_AUTOUPDATER:-}
+      DISABLE_BUG_COMMAND: ${DISABLE_BUG_COMMAND:-}
+      DISABLE_COST_WARNINGS: ${DISABLE_COST_WARNINGS:-}
+      DISABLE_ERROR_REPORTING: ${DISABLE_ERROR_REPORTING:-}
+      DISABLE_NON_ESSENTIAL_MODEL_CALLS: ${DISABLE_NON_ESSENTIAL_MODEL_CALLS:-}
+      DISABLE_TELEMETRY: ${DISABLE_TELEMETRY:-}
+      
+      # Proxy settings
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      
+      # Model token settings
+      MAX_THINKING_TOKENS: ${MAX_THINKING_TOKENS:-}
+      MCP_TIMEOUT: ${MCP_TIMEOUT:-}
+      MCP_TOOL_TIMEOUT: ${MCP_TOOL_TIMEOUT:-}
+      MAX_MCP_OUTPUT_TOKENS: ${MAX_MCP_OUTPUT_TOKENS:-}
+      
+      # Vertex region settings
+      VERTEX_REGION_CLAUDE_3_5_HAIKU: ${VERTEX_REGION_CLAUDE_3_5_HAIKU:-}
+      VERTEX_REGION_CLAUDE_3_5_SONNET: ${VERTEX_REGION_CLAUDE_3_5_SONNET:-}
+      VERTEX_REGION_CLAUDE_3_7_SONNET: ${VERTEX_REGION_CLAUDE_3_7_SONNET:-}
+      VERTEX_REGION_CLAUDE_4_0_OPUS: ${VERTEX_REGION_CLAUDE_4_0_OPUS:-}
+      VERTEX_REGION_CLAUDE_4_0_SONNET: ${VERTEX_REGION_CLAUDE_4_0_SONNET:-}
+    
+    # Network settings
+    network_mode: host
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    
+    # Keep container running
+    stdin_open: true
+    tty: true
+    
+    # Working directory - use the actual workspace path
+    working_dir: ${WORKSPACE_PATH}
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# No named volumes needed - using host directories directly
