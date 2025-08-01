@@ -7,9 +7,10 @@ import subprocess
 import logging
 import time
 import shlex
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from dataclasses import dataclass
 from .simple_launcher import SimpleLauncher
+from .layout_manager import LayoutConfig, TmuxLayoutManager, create_layout, get_layout_for_agent_count
 
 
 @dataclass
@@ -29,6 +30,8 @@ class TmuxManager:
         self.session_name = session_name
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.simple_launcher = SimpleLauncher(self)
+        self.layout_manager = TmuxLayoutManager()
+        self.current_layout = None
         
     def session_exists(self) -> bool:
         """Check if tmux session exists"""
@@ -39,12 +42,15 @@ class TmuxManager:
         except Exception:
             return False
             
-    def create_session(self, num_panes: int = 2, force: bool = False) -> bool:
-        """Create tmux session with specified number of panes
+    def create_session(self, num_panes: int = 2, force: bool = False, 
+                      layout: Optional[Union[str, Dict, LayoutConfig]] = None) -> bool:
+        """Create tmux session with specified number of panes and layout
         
         Args:
             num_panes: Number of panes to create
             force: If True, kill existing session. If False, fail if session exists.
+            layout: Layout configuration (string name, dict, or LayoutConfig object).
+                   Defaults to horizontal layout if not specified.
         """
         try:
             # Check for existing session
@@ -115,16 +121,31 @@ class TmuxManager:
                              "Agents: Initializing..."])
             self._run_command(["tmux", "set-option", "-t", self.session_name, "status-right-length", "80"])
             
-            # Create additional panes with shells
-            for _ in range(1, num_panes):
-                self._run_command(["tmux", "split-window", "-h", "-t", f"{self.session_name}:0", "bash"])
+            # Create layout configuration
+            if layout is None:
+                # Default to horizontal layout
+                layout_config = create_layout("horizontal", num_panes)
+            else:
+                layout_config = create_layout(layout, num_panes)
                 
-            # Even out pane sizes
-            if num_panes > 1:
-                self._run_command(["tmux", "select-layout", "-t", f"{self.session_name}:0", 
-                                 "even-horizontal"])
+            # Store current layout
+            self.current_layout = layout_config
             
-            self.logger.info(f"Created tmux session '{self.session_name}' with {num_panes} panes")
+            # Apply layout if more than one pane
+            if num_panes > 1:
+                layout_commands = self.layout_manager.generate_layout_commands(
+                    layout_config, self.session_name
+                )
+                
+                for cmd in layout_commands:
+                    # Execute layout commands in the session context
+                    cmd_parts = ["tmux"] + cmd.split()
+                    self._run_command(cmd_parts)
+            
+            layout_info = f" using {layout_config.type.value} layout"
+            if layout_config.type.value == "grid" and layout_config.grid_rows:
+                layout_info += f" ({layout_config.grid_rows}x{layout_config.grid_cols})"
+            self.logger.info(f"Created tmux session '{self.session_name}' with {num_panes} panes{layout_info}")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -144,6 +165,11 @@ class TmuxManager:
             # Send command followed by Enter key
             # Using literal mode (-l) to ensure special characters are handled correctly
             self._run_command(["tmux", "send-keys", "-t", target, "-l", command])
+            
+            # Small delay to ensure text is processed before Enter
+            # This helps prevent race conditions when sending multiple messages rapidly
+            time.sleep(0.05)  # 50ms delay
+            
             self._run_command(["tmux", "send-keys", "-t", target, "Enter"])
             
             self.logger.debug(f"Sent to pane {pane_index}: {command[:50]}...")
@@ -486,6 +512,18 @@ class TmuxManager:
         except Exception as e:
             self.logger.error(f"Failed to launch Claude in pane {pane_index}: {e}")
             return None
+    
+    def get_layout_info(self) -> Optional[Dict[str, Any]]:
+        """Get information about current layout"""
+        if not self.current_layout:
+            return None
+            
+        return {
+            "type": self.current_layout.type.value,
+            "agent_count": self.current_layout.agent_count,
+            "keyboard_shortcuts": self.layout_manager.get_keyboard_shortcuts(self.current_layout),
+            "panes": self.list_panes()
+        }
     
     def _run_command(self, cmd: List[str], check: bool = True, 
                     capture_output: bool = False, text: bool = False) -> subprocess.CompletedProcess:

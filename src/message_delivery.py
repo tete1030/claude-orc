@@ -4,6 +4,7 @@ Message Delivery System - Handles message delivery with agent state awareness
 
 import time
 import logging
+import threading
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 from .agent_state_monitor import AgentState
@@ -29,6 +30,10 @@ class MessageDeliverySystem:
         self.notification = notification_settings or MessageNotification()
         # Track which agents we've sent idle reminders to
         self.idle_reminder_sent = {}
+        # Lock to ensure sequential message delivery
+        self._delivery_lock = threading.Lock()
+        # Track last notification time per agent
+        self._last_notification_time = {}
         
     def send_message_to_agent(self, to_agent: str, from_agent: str, message_content: str, priority: str = "normal") -> bool:
         """Send message to agent with state awareness"""
@@ -37,63 +42,73 @@ class MessageDeliverySystem:
             self.logger.error(f"Agent {to_agent} not found")
             return False
             
-        recipient = self.orchestrator.agents[to_agent]
-        
-        # Update agent state
-        state = self.state_monitor.update_agent_state(to_agent, recipient.pane_index)
-        
-        # Create message object (use 'message' field to match MCP server format)
-        message = {
-            'from': from_agent,
-            'to': to_agent,
-            'message': message_content,
-            'priority': priority,
-            'timestamp': time.time()
-        }
-        
-        # Handle based on agent state
-        if state == AgentState.IDLE:
-            # Agent is idle, deliver immediately
-            self.logger.info(f"Agent {to_agent} is idle, delivering message immediately")
-            return self._deliver_message_now(to_agent, message)
+        # Use lock to ensure sequential delivery
+        with self._delivery_lock:
+            recipient = self.orchestrator.agents[to_agent]
             
-        elif state in (AgentState.BUSY, AgentState.WRITING):
-            # Agent is busy or writing
-            state_desc = "busy" if state == AgentState.BUSY else "writing"
-            self.logger.info(f"Agent {to_agent} is {state_desc}, delivering notification anyway")
+            # Update agent state
+            state = self.state_monitor.update_agent_state(to_agent, recipient.pane_index)
             
-            # Add to orchestrator mailbox for persistence
-            if to_agent not in self.orchestrator.mailbox:
-                self.orchestrator.mailbox[to_agent] = []
-            self.orchestrator.mailbox[to_agent].append(message)
+            # Create message object (use 'message' field to match MCP server format)
+            message = {
+                'from': from_agent,
+                'to': to_agent,
+                'message': message_content,
+                'priority': priority,
+                'timestamp': time.time()
+            }
             
-            # Reset idle reminder flag since there's a new message
-            self.idle_reminder_sent[to_agent] = False
-            
-            # Send notification even though agent is busy
-            # Claude Code will handle organizing the inputs
-            agent = self.orchestrator.agents[to_agent]
-            notification = self.notification.notification_format.format(
-                prefix=self.notification.prefix,
-                sender=message['from']
-            )
-            self.tmux.send_to_pane(agent.pane_index, notification)
-            
-            self.logger.info(f"Sent notification to {to_agent} despite {state_desc} state")
-            return True
-            
-        elif state == AgentState.ERROR:
-            self.logger.error(f"Agent {to_agent} is in error state, cannot deliver message")
-            return False
-            
-        elif state == AgentState.QUIT:
-            self.logger.error(f"Agent {to_agent} has quit, cannot deliver message")
-            return False
-            
-        else:
-            # Unknown state, try to deliver anyway
-            self.logger.warning(f"Agent {to_agent} in unknown state, attempting delivery")
-            return self._deliver_message_now(to_agent, message)
+            # Handle based on agent state
+            if state == AgentState.IDLE:
+                # Agent is idle, deliver immediately
+                self.logger.info(f"Agent {to_agent} is idle, delivering message immediately")
+                return self._deliver_message_now(to_agent, message)
+                
+            elif state in (AgentState.BUSY, AgentState.WRITING):
+                # Agent is busy or writing
+                state_desc = "busy" if state == AgentState.BUSY else "writing"
+                self.logger.info(f"Agent {to_agent} is {state_desc}, delivering notification anyway")
+                
+                # Add to orchestrator mailbox for persistence
+                if to_agent not in self.orchestrator.mailbox:
+                    self.orchestrator.mailbox[to_agent] = []
+                self.orchestrator.mailbox[to_agent].append(message)
+                
+                # Reset idle reminder flag since there's a new message
+                self.idle_reminder_sent[to_agent] = False
+                
+                # Send notification even though agent is busy
+                # Claude Code will handle organizing the inputs
+                agent = self.orchestrator.agents[to_agent]
+                notification = self.notification.notification_format.format(
+                    prefix=self.notification.prefix,
+                    sender=message['from']
+                )
+                
+                # Ensure minimum delay between notifications to same agent
+                last_time = self._last_notification_time.get(to_agent, 0)
+                time_since_last = time.time() - last_time
+                if time_since_last < 0.2:  # 200ms minimum between notifications
+                    time.sleep(0.2 - time_since_last)
+                
+                self.tmux.send_to_pane(agent.pane_index, notification)
+                self._last_notification_time[to_agent] = time.time()
+                
+                self.logger.info(f"Sent notification to {to_agent} despite {state_desc} state")
+                return True
+                
+            elif state == AgentState.ERROR:
+                self.logger.error(f"Agent {to_agent} is in error state, cannot deliver message")
+                return False
+                
+            elif state == AgentState.QUIT:
+                self.logger.error(f"Agent {to_agent} has quit, cannot deliver message")
+                return False
+                
+            else:
+                # Unknown state, try to deliver anyway
+                self.logger.warning(f"Agent {to_agent} in unknown state, attempting delivery")
+                return self._deliver_message_now(to_agent, message)
             
     def _deliver_message_now(self, agent_name: str, message: Dict) -> bool:
         """Deliver message immediately to agent"""
@@ -114,8 +129,15 @@ class MessageDeliverySystem:
                 sender=message['from']
             )
             
+            # Ensure minimum delay between notifications to same agent
+            last_time = self._last_notification_time.get(agent_name, 0)
+            time_since_last = time.time() - last_time
+            if time_since_last < 0.2:  # 200ms minimum between notifications
+                time.sleep(0.2 - time_since_last)
+            
             # Send notification
             self.tmux.send_to_pane(agent.pane_index, notification)
+            self._last_notification_time[agent_name] = time.time()
             
             self.logger.info(f"Delivered message notification to {agent_name}")
             return True
