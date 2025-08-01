@@ -52,14 +52,16 @@ cleanup_old_files
 case "$1" in
     "start")
         if [ -z "$2" ]; then
-            echo "Usage: $0 start '<command>' [name]"
+            echo "Usage: $0 start '<command>' [name] [timeout_seconds]"
             echo "Example: $0 start 'npm run dev' dev-server"
+            echo "Example: $0 start 'npm run dev' dev-server 1800"
             exit 1
         fi
         
         COMMAND="$2"
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         BASE_NAME="${3:-bg}"
+        TIMEOUT_SECONDS="${4:-600}"
         NAME="${BASE_NAME}_$TIMESTAMP"
         PID_FILE="$PID_DIR/$NAME.pid"
         LOG_FILE="$LOG_DIR/$NAME.log"
@@ -85,15 +87,64 @@ case "$1" in
         echo "Starting: $COMMAND"
         echo "Name: $NAME"
         echo "Logs: $LOG_FILE"
+        echo "Timeout: ${TIMEOUT_SECONDS} seconds"
         
-        nohup bash -c "$COMMAND" > "$LOG_FILE" 2>&1 &
+        # Remind about timeout option if using default
+        if [ -z "$4" ]; then
+            echo ""
+            echo "Note: Using default timeout of 600 seconds. To specify a different timeout:"
+            echo "  $0 start '<command>' <name> <timeout_seconds>"
+        fi
+        
+        # Create a wrapper script that handles timeout
+        WRAPPER_SCRIPT=$(mktemp)
+        cat > "$WRAPPER_SCRIPT" << 'WRAPPER_EOF'
+#!/bin/bash
+COMMAND="$1"
+TIMEOUT_SECONDS="$2"
+LOG_FILE="$3"
+
+# Start the command
+eval "$COMMAND" &
+CHILD_PID=$!
+
+# Start timeout monitor in background
+(
+    sleep $TIMEOUT_SECONDS
+    if kill -0 $CHILD_PID 2>/dev/null; then
+        echo "[$(date)] Process timed out after ${TIMEOUT_SECONDS} seconds. Sending SIGTERM..." >> "$LOG_FILE"
+        kill -TERM $CHILD_PID 2>/dev/null
+        sleep 10
+        if kill -0 $CHILD_PID 2>/dev/null; then
+            echo "[$(date)] Process didn't stop gracefully, sending SIGKILL..." >> "$LOG_FILE"
+            kill -9 $CHILD_PID 2>/dev/null
+        fi
+    fi
+) &
+TIMEOUT_PID=$!
+
+# Wait for the main command to finish
+wait $CHILD_PID
+EXIT_CODE=$?
+
+# Kill the timeout monitor if it's still running
+kill $TIMEOUT_PID 2>/dev/null
+
+exit $EXIT_CODE
+WRAPPER_EOF
+        
+        chmod +x "$WRAPPER_SCRIPT"
+        nohup bash "$WRAPPER_SCRIPT" "$COMMAND" "$TIMEOUT_SECONDS" "$LOG_FILE" > "$LOG_FILE" 2>&1 &
+        
         # Store PID and metadata in single file
         cat > "$PID_FILE" << EOF
 PID:$!
 CREATED:$TIMESTAMP
 COMMAND:$COMMAND
 NAME:$NAME
+TIMEOUT:$TIMEOUT_SECONDS
 EOF
+        rm -f "$WRAPPER_SCRIPT"
         
         PID=$(grep "^PID:" "$PID_FILE" | cut -d: -f2)
         echo "Started with PID: $PID"
@@ -116,11 +167,26 @@ EOF
         PID=$(grep "^PID:" "$PID_FILE" | cut -d: -f2)
         if kill -0 "$PID" 2>/dev/null; then
             echo "Stopping '$NAME' (PID: $PID)..."
-            kill "$PID"
-            sleep 1
+            # Send SIGTERM for graceful shutdown
+            kill -TERM "$PID" 2>/dev/null
+            
+            # Wait up to 10 seconds for process to exit gracefully
+            wait_count=0
+            while kill -0 "$PID" 2>/dev/null && [ $wait_count -lt 10 ]; do
+                sleep 1
+                wait_count=$((wait_count + 1))
+                echo -n "."
+            done
+            echo
+            
+            # If still running, force kill
             if kill -0 "$PID" 2>/dev/null; then
+                echo "Process didn't stop gracefully, sending SIGKILL..."
                 kill -9 "$PID"
+            else
+                echo "Process stopped gracefully"
             fi
+            
             rm -f "$PID_FILE"
             echo "Stopped"
         else
@@ -200,12 +266,15 @@ EOF
                         pid=$(grep "^PID:" "$pid_file" | cut -d: -f2)
                         created=$(grep "^CREATED:" "$pid_file" | cut -d: -f2)
                         command=$(grep "^COMMAND:" "$pid_file" | cut -d: -f2-)
+                        timeout=$(grep "^TIMEOUT:" "$pid_file" | cut -d: -f2)
                         if kill -0 "$pid" 2>/dev/null; then
                             echo "$name: RUNNING (PID: $pid, Created: $created)"
                             echo "  Command: $command"
+                            [ -n "$timeout" ] && echo "  Timeout: $timeout seconds"
                         else
                             echo "$name: DEAD (Created: $created)"
                             echo "  Command: $command"
+                            [ -n "$timeout" ] && echo "  Timeout: $timeout seconds"
                         fi
                         echo
                     fi
@@ -224,12 +293,15 @@ EOF
                         pid=$(grep "^PID:" "$pid_file" | cut -d: -f2)
                         created=$(grep "^CREATED:" "$pid_file" | cut -d: -f2)
                         command=$(grep "^COMMAND:" "$pid_file" | cut -d: -f2-)
+                        timeout=$(grep "^TIMEOUT:" "$pid_file" | cut -d: -f2)
                         if kill -0 "$pid" 2>/dev/null; then
                             echo "$name: RUNNING (PID: $pid, Created: $created)"
                             echo "  Command: $command"
+                            [ -n "$timeout" ] && echo "  Timeout: $timeout seconds"
                         else
                             echo "$name: DEAD (Created: $created)"
                             echo "  Command: $command"
+                            [ -n "$timeout" ] && echo "  Timeout: $timeout seconds"
                         fi
                         echo
                     fi
@@ -258,27 +330,33 @@ Simple Background Process Manager
 Usage: $0 <command> [args...]
 
 Commands:
-  start '<command>' [name]  - Start command in background (name will get timestamp)
-  stop <name>              - Stop background process
-  status <name>            - Check if process is running
-  logs <name> [lines]      - Show last N lines of logs (default: 50)
-  follow <name>            - Follow logs in real-time
-  list [search]            - List all processes, or search by partial name
-  kill-all                 - Stop all background processes
+  start '<command>' [name] [timeout]  - Start command in background
+                                       - name: optional, will get timestamp
+                                       - timeout: optional, in seconds (default: 600)
+  stop <name>                        - Stop background process (graceful SIGTERM, then SIGKILL)
+  status <name>                      - Check if process is running
+  logs <name> [lines]                - Show last N lines of logs (default: 50)
+  follow <name>                      - Follow logs in real-time
+  list [search]                      - List all processes, or search by partial name
+  kill-all                           - Stop all background processes
 
 Examples:
-  $0 start 'npm run dev' dev-server      # Creates: dev-server_20250126_143025
-  $0 start 'python -m http.server 8080'  # Creates: bg_20250126_143025
+  $0 start 'npm run dev' dev-server         # 600s timeout, creates: dev-server_20250126_143025
+  $0 start 'npm run dev' dev-server 1800    # 1800s (30 min) timeout
+  $0 start 'python -m http.server 8080'     # 600s timeout, creates: bg_20250126_143025
   $0 stop dev-server_20250126_143025
   $0 logs dev-server_20250126_143025 100
-  $0 list                                # List all processes with timestamps
-  $0 list dev-server                     # Search for processes containing 'dev-server'
+  $0 list                                   # List all processes with timestamps
+  $0 list dev-server                        # Search for processes containing 'dev-server'
 
 Files stored in:
   PIDs: $PID_DIR/
   Logs: $LOG_DIR/
   
-Note: Files are isolated per hostname/container
+Note: 
+  - Files are isolated per hostname/container
+  - Processes are automatically terminated after timeout (SIGTERM, then SIGKILL)
+  - Timeout events are logged to the process log file
 EOF
         ;;
 esac

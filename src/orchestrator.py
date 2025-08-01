@@ -187,6 +187,8 @@ class Orchestrator:
                 try:
                     import shutil
                     shutil.copy2(proxy_path, shared_proxy_path)
+                    # Make the script executable
+                    os.chmod(shared_proxy_path, 0o755)
                     proxy_path = shared_proxy_path
                     self.logger.info(f"Copied thin proxy to shared location: {shared_proxy_path}")
                 except Exception as e:
@@ -195,7 +197,7 @@ class Orchestrator:
                 mcp_config = {
                     "mcpServers": {
                         "orchestrator": {
-                            "command": python_executable,
+                            "command": "python3",
                             "args": [proxy_path],
                             "env": {
                                 "AGENT_NAME": agent.name,
@@ -220,6 +222,10 @@ class Orchestrator:
                 agent.session_id = session_id
                 agent.session_file = os.path.join(self.config.session_dir, f"{session_id}.jsonl")
                 self.logger.info(f"Agent {agent.name} launched with session ID: {session_id}")
+                
+                # Set agent name as a pane variable
+                # This will be displayed in the pane border along with whatever title Claude sets
+                self.tmux.set_pane_agent_name(agent.pane_index, agent.name)
             else:
                 self.logger.error(f"Failed to launch agent {agent.name}")
                 self.stop()
@@ -548,6 +554,11 @@ class Orchestrator:
         
         return {name: status for name in agent_names 
                 if (status := self.get_agent_status(name)) is not None}
+    
+    def get_mailbox_count(self, agent_name: str) -> int:
+        """Get the number of messages in an agent's mailbox"""
+        with self._mailbox_lock:
+            return len(self.mailbox.get(agent_name, []))
     
     # Removed get_session_id_from_agent - no longer needed with two-stage launcher
     

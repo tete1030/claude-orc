@@ -30,10 +30,7 @@ class CentralMCPServer:
         self.logger = logging.getLogger(__name__)
         
         # Create MCP instance
-        self.mcp = FastMCP(
-            "OrchestratorCentral",
-            description="Central MCP server for all agents"
-        )
+        self.mcp = FastMCP("OrchestratorCentral")
         
         # Setup HTTP routes
         self._setup_routes()

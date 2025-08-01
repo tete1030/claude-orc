@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
+# TZ will be inherited from the host environment at runtime
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -64,7 +64,17 @@ RUN apt-get update && apt-get install -y \
     sysstat \
     # For dynamic user switching
     gosu \
+    # Locale support
+    locales \
     && rm -rf /var/lib/apt/lists/*
+
+# Generate en_US.UTF-8 locale since it's commonly used
+RUN locale-gen en_US.UTF-8
+
+# Set C.UTF-8 as default locale - this is lightweight and prevents warnings
+# The actual locale values will be inherited from the host environment
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 # Install Playwright browser dependencies
 RUN apt-get update && apt-get install -y \

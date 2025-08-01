@@ -17,6 +17,7 @@ import threading
 import time
 import argparse
 import shlex
+import signal
 from pathlib import Path
 from typing import Optional
 
@@ -43,7 +44,12 @@ Your role:
 2. Delegate tasks to specialists
 3. Synthesize results
 
-IMPORTANT: You must use the MCP tools provided. Do not try to use other tools or commands.
+IMPORTANT RULES:
+- You must ONLY use the MCP tools provided above
+- Do NOT use Bash, Read, Write, or any file system tools
+- Do NOT try to debug, fix, or run any Python scripts
+- Do NOT attempt to install packages or modify the system
+- If MCP tools are not working, simply report the issue and wait
 
 Start by using list_agents to see your team, then delegate a task to the Researcher.
 """
@@ -60,7 +66,12 @@ Your role:
 2. Provide detailed, accurate information
 3. Report findings back to the Leader
 
-IMPORTANT: You must use the MCP tools provided. Do not try to use other tools or commands.
+IMPORTANT RULES:
+- You must ONLY use the MCP tools provided above
+- Do NOT use Bash, Read, Write, or any file system tools
+- Do NOT try to debug, fix, or run any Python scripts
+- Do NOT attempt to install packages or modify the system
+- If MCP tools are not working, simply report the issue and wait
 """
 
 WRITER_PROMPT = """You are the Writer agent - a specialist in creating content.
@@ -75,7 +86,12 @@ Your role:
 2. Edit and refine text
 3. Report completed work back to the Leader
 
-IMPORTANT: You must use the MCP tools provided. Do not try to use other tools or commands.
+IMPORTANT RULES:
+- You must ONLY use the MCP tools provided above
+- Do NOT use Bash, Read, Write, or any file system tools
+- Do NOT try to debug, fix, or run any Python scripts
+- Do NOT attempt to install packages or modify the system
+- If MCP tools are not working, simply report the issue and wait
 """
 
 
@@ -132,6 +148,43 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
+    # Variables for cleanup
+    orchestrator = None
+    mcp_server_loop = None
+    mcp_thread = None
+    shutdown_event = threading.Event()
+    
+    def signal_handler(signum, frame):
+        """Handle Ctrl+C gracefully"""
+        print("\n\nReceived interrupt signal. Shutting down gracefully...")
+        shutdown_event.set()
+        
+        # Stop orchestrator first
+        if orchestrator and orchestrator.running:
+            orchestrator.stop()
+        
+        # Stop MCP server gracefully
+        if mcp_server_loop and not mcp_server_loop.is_closed():
+            # Cancel all tasks in the event loop
+            def shutdown_loop():
+                # Cancel all running tasks
+                tasks = asyncio.all_tasks(mcp_server_loop)
+                for task in tasks:
+                    task.cancel()
+                mcp_server_loop.stop()
+            
+            mcp_server_loop.call_soon_threadsafe(shutdown_loop)
+            
+            # Give the thread a moment to clean up
+            if mcp_thread and mcp_thread.is_alive():
+                mcp_thread.join(timeout=2.0)
+        
+        # Exit cleanly
+        sys.exit(0)
+    
+    # Register signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+    
     # Override the launcher config
     original_build = ClaudeLauncherConfig.build_command_string
     def patched_build(agent_name, session_id, system_prompt, mcp_config_path=None):
@@ -169,20 +222,52 @@ def main():
         system_prompt=WRITER_PROMPT
     )
     
-    # Start MCP server in background
+    # Start MCP server in background with automatic port adjustment
     mcp_server_loop = None
     mcp_thread = None
+    actual_port = args.port
+    
+    # Try to find an available port
+    import socket
+    for port_offset in range(10):  # Try up to 10 ports
+        test_port = args.port + port_offset
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('', test_port))
+            sock.close()
+            actual_port = test_port
+            break
+        except OSError:
+            continue
+    else:
+        print(f"ERROR: Could not find available port in range {args.port}-{args.port + 9}")
+        sys.exit(1)
+    
+    if actual_port != args.port:
+        print(f"Port {args.port} is busy, using port {actual_port} instead")
     
     def run_mcp_in_thread():
         nonlocal mcp_server_loop
         mcp_server_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(mcp_server_loop)
         try:
-            mcp_server_loop.run_until_complete(run_mcp_server(orchestrator, args.port))
+            mcp_server_loop.run_until_complete(run_mcp_server(orchestrator, actual_port))
         except asyncio.CancelledError:
             pass
+        except RuntimeError as e:
+            if "Event loop stopped" not in str(e):
+                raise
+        finally:
+            # Clean up pending tasks
+            pending = asyncio.all_tasks(mcp_server_loop)
+            for task in pending:
+                task.cancel()
+            # Run event loop briefly to allow cancellations to complete
+            if pending and not mcp_server_loop.is_closed():
+                mcp_server_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            mcp_server_loop.close()
     
-    mcp_thread = threading.Thread(target=run_mcp_in_thread, daemon=True)
+    mcp_thread = threading.Thread(target=run_mcp_in_thread, daemon=False)
     mcp_thread.start()
     
     # Wait for server to start
@@ -195,10 +280,10 @@ Enhanced Team MCP Demo - Collaborative AI Agents
 """)
     
     # Start orchestrator
-    if orchestrator.start(mcp_port=args.port):
+    if orchestrator.start(mcp_port=actual_port):
         print(f"""
 ✓ Enhanced orchestrator started successfully!
-✓ MCP server running on port {args.port}
+✓ MCP server running on port {actual_port}
 ✓ Model: {args.model}
 ✓ Debug mode: {'enabled' if args.debug else 'disabled'}
 ✓ Agent state monitoring: enabled
@@ -238,16 +323,14 @@ Press Ctrl+C to stop
         state_thread.start()
         
         try:
-            # Keep running
-            while True:
+            # Keep running until shutdown
+            while not shutdown_event.is_set():
                 time.sleep(1)
         except KeyboardInterrupt:
+            # Let the signal handler deal with cleanup
             pass
-            
-        # Cleanup
-        orchestrator.stop()
-        if mcp_server_loop:
-            mcp_server_loop.call_soon_threadsafe(mcp_server_loop.stop)
+        except Exception as e:
+            print(f"Error in main loop: {e}")
             
     else:
         print("❌ Failed to start orchestrator")

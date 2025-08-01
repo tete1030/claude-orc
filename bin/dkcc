@@ -156,6 +156,17 @@ image_exists() {
 build_docker_env_args() {
     local env_args=""
     
+    # Locale and terminal settings - inherit from calling environment
+    [[ -n "$LC_ALL" ]] && env_args="$env_args -e LC_ALL"
+    [[ -n "$LC_CTYPE" ]] && env_args="$env_args -e LC_CTYPE"
+    [[ -n "$LANG" ]] && env_args="$env_args -e LANG"
+    [[ -n "$TERM" ]] && env_args="$env_args -e TERM"
+    [[ -n "$COLORTERM" ]] && env_args="$env_args -e COLORTERM"
+    [[ -n "$LANGUAGE" ]] && env_args="$env_args -e LANGUAGE"
+    
+    # Timezone settings
+    [[ -n "$TZ" ]] && env_args="$env_args -e TZ"
+    
     # Claude Code API settings
     [[ -n "$ANTHROPIC_API_KEY" ]] && env_args="$env_args -e ANTHROPIC_API_KEY"
     [[ -n "$ANTHROPIC_AUTH_TOKEN" ]] && env_args="$env_args -e ANTHROPIC_AUTH_TOKEN"
@@ -252,6 +263,10 @@ build_volume_args() {
     volume_args="$volume_args -v $HOME/.config/gh:$HOME/.config/gh:ro"
     volume_args="$volume_args -v /tmp/claude-orc:/tmp/claude-orc"
     
+    # Mount timezone files if they exist
+    [[ -f /etc/localtime ]] && volume_args="$volume_args -v /etc/localtime:/etc/localtime:ro"
+    [[ -f /etc/timezone ]] && volume_args="$volume_args -v /etc/timezone:/etc/timezone:ro"
+    
     echo "$volume_args"
 }
 
@@ -314,7 +329,7 @@ start_container() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=xterm-256color \
+        -e TERM=${TERM:-xterm-256color} \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -365,6 +380,13 @@ exec_shell() {
             -e LOCAL_GROUP_ID=$(id -g) \
             -e LOCAL_USER_NAME=$USER \
             -e LOCAL_USER_HOME=$HOME \
+            -e LC_ALL="$LC_ALL" \
+            -e LC_CTYPE="$LC_CTYPE" \
+            -e LANG="$LANG" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            -e LANGUAGE="$LANGUAGE" \
+            -e TZ="$TZ" \
             "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh /bin/bash
     else
         # Execute the provided command
@@ -374,6 +396,13 @@ exec_shell() {
             -e LOCAL_GROUP_ID=$(id -g) \
             -e LOCAL_USER_NAME=$USER \
             -e LOCAL_USER_HOME=$HOME \
+            -e LC_ALL="$LC_ALL" \
+            -e LC_CTYPE="$LC_CTYPE" \
+            -e LANG="$LANG" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            -e LANGUAGE="$LANGUAGE" \
+            -e TZ="$TZ" \
             "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh "${args[@]}"
     fi
 }
@@ -410,7 +439,7 @@ run_temporary() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=xterm-256color \
+        -e TERM=${TERM:-xterm-256color} \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -449,7 +478,7 @@ run_shell() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=xterm-256color \
+        -e TERM=${TERM:-xterm-256color} \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -479,6 +508,12 @@ claude_code() {
         -e LOCAL_GROUP_ID=$(id -g) \
         -e LOCAL_USER_NAME=$USER \
         -e LOCAL_USER_HOME=$HOME \
+        -e LC_ALL="$LC_ALL" \
+        -e LC_CTYPE="$LC_CTYPE" \
+        -e LANG="$LANG" \
+        -e TERM="$TERM" \
+        -e COLORTERM="$COLORTERM" \
+        -e LANGUAGE="$LANGUAGE" \
         "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh claude --dangerously-skip-permissions "${args[@]}"
 }
 

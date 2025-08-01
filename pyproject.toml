@@ -1,0 +1,88 @@
+[tool.poetry]
+name = "claude-orc"
+version = "0.1.0"
+description = "Claude Code Multi-Agent Orchestrator - A framework for orchestrating multiple Claude Code agents"
+authors = ["Claude ORC Contributors"]
+readme = "README.md"
+license = "MIT"
+keywords = ["claude", "orchestrator", "mcp", "multi-agent", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+homepage = "https://github.com/anthropics/claude-orc"
+repository = "https://github.com/anthropics/claude-orc"
+documentation = "https://github.com/anthropics/claude-orc/tree/main/docs"
+
+[tool.poetry.dependencies]
+python = "^3.12.11"
+aiohttp = "^3.8.0"
+aiofiles = "^23.0.0"
+mcp = {extras = ["cli"], version = "^1.12.3"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+pytest-asyncio = "^0.21.0"
+pytest-timeout = "^2.1.0"
+black = "^23.0.0"
+flake8 = "^6.0.0"
+mypy = "^1.0.0"
+isort = "^5.12.0"
+
+[tool.poetry.scripts]
+claude-bg = "bin.claude_bg:main"
+dkcc = "bin.dkcc:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+timeout = 300
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | .temp
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

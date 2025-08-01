@@ -69,7 +69,7 @@ class LiveStateMonitor:
         """Run the monitor with curses interface"""
         curses.curs_set(0)  # Hide cursor
         stdscr.nodelay(1)   # Non-blocking input
-        stdscr.timeout(100) # Refresh every 100ms
+        stdscr.timeout(500) # Refresh every 500ms to reduce flashing
         
         # Color pairs
         curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)   # Idle
@@ -88,6 +88,7 @@ class LiveStateMonitor:
         
         running = True
         update_count = 0
+        previous_states = {}  # Track previous states to minimize redraws
         
         while running:
             try:
@@ -97,14 +98,18 @@ class LiveStateMonitor:
                 if len(self.history) > self.max_history:
                     self.history.pop(0)
                 
-                # Clear screen
-                stdscr.clear()
+                # Only clear if this is the first update or on resize
+                if update_count == 0:
+                    stdscr.clear()
                 
                 # Header
                 height, width = stdscr.getmaxyx()
                 header = f"Live Agent State Monitor - Session: {self.session_name}"
                 stdscr.addstr(0, 0, header, curses.A_BOLD)
-                stdscr.addstr(1, 0, f"Time: {current['timestamp'].strftime('%H:%M:%S.%f')[:-3]}")
+                
+                # Update time with padding to clear old time
+                time_str = f"Time: {current['timestamp'].strftime('%H:%M:%S.%f')[:-3]}"
+                stdscr.addstr(1, 0, time_str + " " * (width - len(time_str) - 1))
                 stdscr.addstr(2, 0, "-" * min(80, width))
                 
                 # Agent states
@@ -117,6 +122,10 @@ class LiveStateMonitor:
                     state = pane["state"]
                     color = curses.color_pair(color_map.get(state, 5))
                     
+                    # Clear the line first to prevent ghosting
+                    stdscr.move(row, 0)
+                    stdscr.clrtoeol()
+                    
                     stdscr.addstr(row, 0, f"Pane {pane['index']}: ", curses.A_BOLD)
                     stdscr.addstr(row, 8, f"{state:8}", color | curses.A_BOLD)
                     
@@ -126,16 +135,18 @@ class LiveStateMonitor:
                     
                     # Processing indicator
                     if pane["processing_indicator"]:
+                        stdscr.move(row + 1, 0)
+                        stdscr.clrtoeol()
                         stdscr.addstr(row + 1, 4, f"└─ {pane['processing_indicator'][:60]}", 
                                     curses.color_pair(2))
                         row += 1
                     
                     # Last line preview
+                    stdscr.move(row + 1, 0)
+                    stdscr.clrtoeol()
                     if pane["last_line"]:
                         stdscr.addstr(row + 1, 4, f"└─ {pane['last_line'][:60]}...", 
                                     curses.color_pair(5))
-                        row += 1
-                    
                     row += 2
                 
                 # State transition history

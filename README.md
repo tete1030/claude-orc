@@ -29,6 +29,7 @@ This orchestrator enables multiple Claude agents to work together by:
 
 1. Prerequisites:
    - Python 3.8+
+   - Poetry (install with `curl -sSL https://install.python-poetry.org | python3 -`)
    - tmux installed (`sudo apt install tmux` or `brew install tmux`)
    - Claude CLI installed and configured
    - Docker and Docker Compose (for isolated agent environments)
@@ -36,7 +37,9 @@ This orchestrator enables multiple Claude agents to work together by:
 2. Install dependencies:
    ```bash
    cd orchestrator
-   pip install -r requirements.txt
+   poetry install         # Install all dependencies including dev
+   # or
+   poetry install --only main  # Install only production dependencies
    ```
 
 3. Install utilities:
@@ -54,6 +57,9 @@ This orchestrator enables multiple Claude agents to work together by:
 
 ```bash
 cd orchestrator
+poetry run python examples/team_mcp_demo_enhanced.py
+# or activate the virtual environment first
+poetry shell
 python examples/team_mcp_demo_enhanced.py
 ```
 
@@ -169,7 +175,9 @@ The `OrchestratorConfig` class supports:
 
 Run the test suite:
 ```bash
-./scripts/run_tests.sh
+poetry run pytest
+# or
+poetry run ./scripts/run_tests.sh
 ```
 
 ## Examples

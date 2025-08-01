@@ -55,6 +55,12 @@ class ClaudeLauncherConfig:
     @classmethod
     def verify_script_exists(cls) -> bool:
         """Verify the Docker script exists"""
+        # First check if it's in PATH
+        import shutil
+        if shutil.which(cls.DOCKER_SCRIPT):
+            return True
+            
+        # Then check current directory
         if os.path.exists(cls.DOCKER_SCRIPT):
             return True
             

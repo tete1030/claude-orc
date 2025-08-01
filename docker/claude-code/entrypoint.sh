@@ -1,6 +1,25 @@
 #!/bin/bash
 set -e
 
+# Prevent locale warnings by using C.UTF-8 as fallback if requested locale isn't available
+# Check if the requested locale exists, otherwise use C.UTF-8
+if [ -n "$LC_ALL" ]; then
+    # Check if the locale is available (handle both en_US.UTF-8 and en_US.utf8 formats)
+    LOCALE_CHECK=$(echo "$LC_ALL" | sed 's/UTF-8/utf8/g' | tr '[:upper:]' '[:lower:]')
+    if ! locale -a 2>/dev/null | grep -qi "^${LOCALE_CHECK}$"; then
+        # Locale not available, use C.UTF-8 as fallback
+        export LC_ALL="C.UTF-8"
+    fi
+fi
+
+# Do the same for LANG
+if [ -n "$LANG" ]; then
+    LOCALE_CHECK=$(echo "$LANG" | sed 's/UTF-8/utf8/g' | tr '[:upper:]' '[:lower:]')
+    if ! locale -a 2>/dev/null | grep -qi "^${LOCALE_CHECK}$"; then
+        export LANG="C.UTF-8"
+    fi
+fi
+
 # Get the UID and GID from environment variables (passed from docker-compose/run)
 USER_ID=${LOCAL_USER_ID:-1000}
 GROUP_ID=${LOCAL_GROUP_ID:-1000}
@@ -40,6 +59,27 @@ fi
 # Ensure home directory exists and has correct permissions
 mkdir -p $USER_HOME
 chown $USER_ID:$GROUP_ID $USER_HOME
+
+# Create or update .bashrc with useful defaults
+if [ ! -f $USER_HOME/.bashrc ]; then
+    cat > $USER_HOME/.bashrc << 'EOF'
+# Source global bashrc if it exists
+if [ -f /etc/bash.bashrc ]; then
+    . /etc/bash.bashrc
+fi
+
+# Enable color support
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+fi
+
+# Set prompt
+PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+EOF
+    chown $USER_ID:$GROUP_ID $USER_HOME/.bashrc
+fi
 
 # Add user to docker group if docker socket is mounted
 if [ -S /var/run/docker.sock ]; then
