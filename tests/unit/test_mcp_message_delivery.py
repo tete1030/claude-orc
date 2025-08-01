@@ -5,10 +5,10 @@ Unit tests for MCP message delivery integration
 import unittest
 from unittest.mock import MagicMock, patch
 
-from orchestrator.src.mcp_central_server import CentralMCPServer
-from orchestrator.src.orchestrator_enhanced import EnhancedOrchestrator
-from orchestrator.src.orchestrator import OrchestratorConfig, Agent
-from orchestrator.src.agent_state_monitor import AgentState
+from src.mcp_central_server import CentralMCPServer
+from src.orchestrator_enhanced import EnhancedOrchestrator
+from src.orchestrator import OrchestratorConfig, Agent
+from src.agent_state_monitor import AgentState
 
 
 class TestMCPMessageDelivery(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestMCPMessageDelivery(unittest.TestCase):
         
         with patch('orchestrator.src.orchestrator.TmuxManager'):
             # Use base Orchestrator instead of EnhancedOrchestrator
-            from orchestrator.src.orchestrator import Orchestrator
+            from src.orchestrator import Orchestrator
             basic_orchestrator = Orchestrator(config)
             basic_orchestrator.tmux = MagicMock()
             

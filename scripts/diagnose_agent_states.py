@@ -10,6 +10,7 @@ import sys
 import time
 import json
 import argparse
+import subprocess
 from datetime import datetime
 from pathlib import Path
 import re
@@ -245,6 +246,41 @@ class AgentStateDiagnostics:
             time.sleep(3)
             
         snapshot = self.capture_snapshot()
+        
+        # Save snapshot to timestamped file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        snapshot_file = Path(".temp") / f"state_snapshot_{timestamp}.txt"
+        snapshot_file.parent.mkdir(exist_ok=True)
+        
+        with open(snapshot_file, 'w') as f:
+            f.write(f"State Snapshot - {snapshot['timestamp']}\n")
+            f.write(f"Session: {self.session_name}\n")
+            f.write("="*80 + "\n\n")
+            
+            for pane in snapshot["panes"]:  # type: ignore
+                # Try to get agent name
+                agent_name = f"Agent{pane['pane_index']}"
+                try:
+                    result = subprocess.run(
+                        ["tmux", "show-options", "-p", "-t", 
+                         f"{self.session_name}:0.{pane['pane_index']}", "@agent_name"],
+                        capture_output=True, text=True
+                    )
+                    if result.returncode == 0 and "=" in result.stdout:
+                        agent_name = result.stdout.strip().split("=", 1)[1]
+                except:
+                    pass
+                
+                f.write(f"PANE {pane['pane_index']} - {agent_name} - STATE: {pane['detected_state']}\n")
+                f.write("-"*80 + "\n")
+                f.write("Last 10 lines:\n")
+                f.write(pane['last_10_lines'])
+                f.write("\n\nFull recent content (last 50 lines):\n")
+                f.write("-"*40 + "\n")
+                f.write(pane['recent_content'] or "")
+                f.write("\n\n" + "="*80 + "\n\n")
+        
+        print(f"\nSnapshot saved to: {snapshot_file}")
         print("\nCurrent states:")
         for pane in snapshot["panes"]:  # type: ignore
             print(f"Pane {pane['pane_index']}: {pane['detected_state']}")

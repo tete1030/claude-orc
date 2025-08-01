@@ -9,7 +9,7 @@ import threading
 import subprocess
 from unittest.mock import patch, MagicMock
 
-from orchestrator.src.orchestrator import Orchestrator, OrchestratorConfig
+from src.orchestrator import Orchestrator, OrchestratorConfig
 
 
 class MockClaude:

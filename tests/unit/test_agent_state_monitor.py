@@ -425,5 +425,38 @@ Some previous output
                                f"Transition {i}: Expected {expected} for content: {content[:50]}...")
 
 
+    def test_busy_state_with_message_notification(self):
+        """Test BUSY state detection with message notification between indicator and prompt"""
+        content = '''Some previous content
+
+⠙ Reviewing… (3s)
+[MESSAGE] You have a new message from Leader. Check it when convenient using 'check_messages' - no need to interrupt your current task unless urgent.
+
+╭─ Enter your message ──────────────────────────────────────────────────╮
+│ >                                                                      │
+╰────────────────────────────────────────────────────────────────────────╯'''
+        
+        # Mark agent as initialized first
+        self._set_agent_as_initialized()
+        state = self.monitor.detect_agent_state(content, "TestAgent")
+        self.assertEqual(state, AgentState.BUSY)
+    
+    def test_busy_state_with_multiple_notifications(self):
+        """Test BUSY state with multiple message notifications"""
+        content = '''✸ Analyzing… (1s)
+↓ 523 tokens
+[MESSAGE] You have a new message from Architect. Check it when convenient using 'check_messages' - no need to interrupt your current task unless urgent.
+[MESSAGE] Reminder: You have 3 unread message(s) in your mailbox. Use 'check_messages' to read them.
+
+╭─ Enter your message ──────────────────────────────────────────────────╮
+│ >                                                                      │
+╰────────────────────────────────────────────────────────────────────────╯'''
+        
+        # Mark agent as initialized first
+        self._set_agent_as_initialized()
+        state = self.monitor.detect_agent_state(content, "TestAgent")
+        self.assertEqual(state, AgentState.BUSY)
+
+
 if __name__ == '__main__':
     unittest.main()

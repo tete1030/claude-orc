@@ -10,7 +10,7 @@ import shutil
 from datetime import datetime
 from queue import Queue
 
-from orchestrator.src.orchestrator import (
+from src.orchestrator import (
     Orchestrator, OrchestratorConfig, Agent, Command
 )
 import sys

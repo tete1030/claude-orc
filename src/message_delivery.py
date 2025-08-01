@@ -13,8 +13,9 @@ from .agent_state_monitor import AgentState
 class MessageNotification:
     """Message notification settings"""
     prefix: str = "[MESSAGE]"
-    notification_format: str = "{prefix} You have a new message from {sender}. Use 'check_messages' to read it."
+    notification_format: str = "{prefix} You have a new message from {sender}. Check it when convenient using 'check_messages' - no need to interrupt your current task unless urgent."
     queue_notification_format: str = "{prefix} You received {count} messages while busy. Use 'check_messages' to read them."
+    idle_reminder_format: str = "{prefix} Reminder: You have {count} unread message(s) in your mailbox. Use 'check_messages' to read them."
     
 
 class MessageDeliverySystem:
@@ -26,6 +27,8 @@ class MessageDeliverySystem:
         self.state_monitor = state_monitor
         self.logger = logging.getLogger(__name__)
         self.notification = notification_settings or MessageNotification()
+        # Track which agents we've sent idle reminders to
+        self.idle_reminder_sent = {}
         
     def send_message_to_agent(self, to_agent: str, from_agent: str, message_content: str, priority: str = "normal") -> bool:
         """Send message to agent with state awareness"""
@@ -55,15 +58,28 @@ class MessageDeliverySystem:
             return self._deliver_message_now(to_agent, message)
             
         elif state in (AgentState.BUSY, AgentState.WRITING):
-            # Agent is busy or writing, queue the message
+            # Agent is busy or writing
             state_desc = "busy" if state == AgentState.BUSY else "writing"
-            self.logger.info(f"Agent {to_agent} is {state_desc}, queueing message")
-            self.state_monitor.queue_message_for_agent(to_agent, message)
+            self.logger.info(f"Agent {to_agent} is {state_desc}, delivering notification anyway")
             
-            # Add to orchestrator mailbox as well for persistence
+            # Add to orchestrator mailbox for persistence
             if to_agent not in self.orchestrator.mailbox:
                 self.orchestrator.mailbox[to_agent] = []
             self.orchestrator.mailbox[to_agent].append(message)
+            
+            # Reset idle reminder flag since there's a new message
+            self.idle_reminder_sent[to_agent] = False
+            
+            # Send notification even though agent is busy
+            # Claude Code will handle organizing the inputs
+            agent = self.orchestrator.agents[to_agent]
+            notification = self.notification.notification_format.format(
+                prefix=self.notification.prefix,
+                sender=message['from']
+            )
+            self.tmux.send_to_pane(agent.pane_index, notification)
+            
+            self.logger.info(f"Sent notification to {to_agent} despite {state_desc} state")
             return True
             
         elif state == AgentState.ERROR:
@@ -89,6 +105,9 @@ class MessageDeliverySystem:
                 self.orchestrator.mailbox[agent_name] = []
             self.orchestrator.mailbox[agent_name].append(message)
             
+            # Reset idle reminder flag since there's a new message
+            self.idle_reminder_sent[agent_name] = False
+            
             # Send notification to agent's pane
             notification = self.notification.notification_format.format(
                 prefix=self.notification.prefix,
@@ -106,31 +125,49 @@ class MessageDeliverySystem:
             return False
             
     def check_and_deliver_pending_messages(self) -> None:
-        """Check all agents and deliver pending messages to those who became idle"""
+        """Check all agents and send idle reminders for unread messages
+        
+        This method now:
+        1. Clears any legacy queued messages
+        2. Sends reminders to idle agents who have unread messages
+        """
         for agent_name, agent in self.orchestrator.agents.items():
             # Update state
             state = self.state_monitor.update_agent_state(agent_name, agent.pane_index)
             
-            # If agent is idle and has pending messages
-            if state == AgentState.IDLE and self.state_monitor.has_pending_messages(agent_name):
+            # First, handle any legacy pending messages (from before the change)
+            if self.state_monitor.has_pending_messages(agent_name):
                 pending_messages = self.state_monitor.get_pending_messages(agent_name)
                 
                 if pending_messages:
-                    self.logger.info(f"Delivering {len(pending_messages)} pending messages to {agent_name}")
+                    self.logger.info(f"Clearing {len(pending_messages)} legacy pending messages for {agent_name}")
                     
                     # Add all pending messages to mailbox
                     if agent_name not in self.orchestrator.mailbox:
                         self.orchestrator.mailbox[agent_name] = []
                     self.orchestrator.mailbox[agent_name].extend(pending_messages)
-                    
-                    # Notify about pending messages - just one notification
-                    notification = self.notification.queue_notification_format.format(
+            
+            # Now check for idle reminders
+            if state == AgentState.IDLE:
+                # Check if agent has unread messages in mailbox
+                mailbox_count = len(self.orchestrator.mailbox.get(agent_name, []))
+                
+                # If they have messages and we haven't sent a reminder yet
+                if mailbox_count > 0 and not self.idle_reminder_sent.get(agent_name, False):
+                    # Send idle reminder
+                    notification = self.notification.idle_reminder_format.format(
                         prefix=self.notification.prefix,
-                        count=len(pending_messages)
+                        count=mailbox_count
                     )
                     
                     self.tmux.send_to_pane(agent.pane_index, notification)
-                    # Don't send the redundant "Use 'check_messages'" prompt
+                    self.idle_reminder_sent[agent_name] = True
+                    
+                    self.logger.info(f"Sent idle reminder to {agent_name} for {mailbox_count} unread messages")
+                
+                # If mailbox is empty, reset the reminder flag
+                elif mailbox_count == 0:
+                    self.idle_reminder_sent[agent_name] = False
                     
     def send_text_to_agent_input(self, agent_name: str, text: str) -> bool:
         """Send text directly to agent's input field (for non-vim mode)"""

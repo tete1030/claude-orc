@@ -39,13 +39,28 @@ class TmuxManager:
         except Exception:
             return False
             
-    def create_session(self, num_panes: int = 2) -> bool:
-        """Create tmux session with specified number of panes"""
+    def create_session(self, num_panes: int = 2, force: bool = False) -> bool:
+        """Create tmux session with specified number of panes
+        
+        Args:
+            num_panes: Number of panes to create
+            force: If True, kill existing session. If False, fail if session exists.
+        """
         try:
-            # Kill existing session if any
+            # Check for existing session
             if self.session_exists():
-                self.kill_session()
-                time.sleep(0.5)
+                if not force:
+                    self.logger.error(f"Tmux session '{self.session_name}' already exists!")
+                    self.logger.info("Options:")
+                    self.logger.info(f"  1. Attach to existing: tmux attach -t {self.session_name}")
+                    self.logger.info(f"  2. Kill existing: tmux kill-session -t {self.session_name}")
+                    self.logger.info(f"  3. Use --force flag to auto-kill existing session")
+                    self.logger.info(f"  4. Use a different session name")
+                    return False
+                else:
+                    self.logger.warning(f"Force mode: Killing existing session '{self.session_name}'")
+                    self.kill_session()
+                    time.sleep(0.5)
             
             # Create new session (detached) with a shell
             self._run_command(["tmux", "new-session", "-d", "-s", self.session_name, "bash"])
@@ -117,12 +132,18 @@ class TmuxManager:
             return False
             
     def send_to_pane(self, pane_index: int, command: str) -> bool:
-        """Send command to specific pane"""
+        """Send command to specific pane
+        
+        Note: This sends the text and Enter as separate commands, which can
+        cause issues if the target is processing. For critical messages,
+        consider using send-keys with -l flag for literal text.
+        """
         try:
             target = f"{self.session_name}:0.{pane_index}"
             
             # Send command followed by Enter key
-            self._run_command(["tmux", "send-keys", "-t", target, command])
+            # Using literal mode (-l) to ensure special characters are handled correctly
+            self._run_command(["tmux", "send-keys", "-t", target, "-l", command])
             self._run_command(["tmux", "send-keys", "-t", target, "Enter"])
             
             self.logger.debug(f"Sent to pane {pane_index}: {command[:50]}...")

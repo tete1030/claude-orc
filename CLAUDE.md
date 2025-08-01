@@ -157,15 +157,21 @@ The agent state monitor detects states by analyzing tmux pane content:
 
 **Key Pattern**: Claude's processing indicator starts with any character (rotating spinner) followed by space and a processing word.
 
-### Message Delivery
-Messages are delivered based on agent state:
-- **IDLE**: Delivered immediately with notification
-- **BUSY/WRITING**: Queued for later delivery
+### Message Delivery (Updated 2025-08-01)
+Messages are now delivered with more flexible handling:
+- **ALL STATES**: Notifications sent immediately (Claude Code handles input organization)
+- **IDLE**: Message delivered with standard notification
+- **BUSY/WRITING**: Message delivered with note to check "when convenient"
 - **ERROR/QUIT**: Not delivered
 
-**Notification Format**: 
-- Single notification per message: `[MESSAGE] You have a new message from Sender. Use 'check_messages' to read it.`
-- No duplicate prompts
+**Notification Formats**: 
+- Standard: `[MESSAGE] You have a new message from Sender. Check it when convenient using 'check_messages' - no need to interrupt your current task unless urgent.`
+- Idle reminder: `[MESSAGE] Reminder: You have X unread message(s) in your mailbox. Use 'check_messages' to read them.`
+
+**Intelligent Reminders**:
+- Agents are told they can check messages at their convenience
+- When agents become IDLE with unread messages, a reminder is sent once
+- Reminder resets when new messages arrive or mailbox is cleared
 
 ### Testing Discipline
 - Use provided test scripts, don't bypass
@@ -230,6 +236,27 @@ Messages are delivered based on agent state:
   # Kill specific session
   tmux kill-session -t simple-mcp-demo
   ```
+
+### Session Conflict Detection (2025-08-01)
+The orchestrator now detects existing tmux sessions to prevent accidental overwrites:
+- **Default behavior**: Fails with helpful error message if session exists
+- **Options when session exists**:
+  1. Attach to existing: `tmux attach -t <session-name>`
+  2. Kill existing: `tmux kill-session -t <session-name>`
+  3. Use `--force` flag to auto-kill existing session
+  4. Use `--session <name>` to specify a different session name
+
+Example usage:
+```bash
+# Will fail if session exists
+python examples/team_mcp_demo.py
+
+# Force kill existing session
+python examples/team_mcp_demo.py --force
+
+# Use different session name
+python examples/team_mcp_demo.py --session my-custom-session
+```
 
 ## Background Process Management
 
@@ -306,6 +333,12 @@ python scripts/monitor_live_states.py <session-name>
 
 # Capture detailed state data for analysis
 python scripts/diagnose_agent_states.py <session-name> --duration 120
+
+# Quick state snapshot when you see an issue
+python scripts/diagnose_agent_states.py <session-name> --single
+# or use the shortcut:
+./scripts/capture-state-snapshot.sh [session-name]
+# Saves to .temp/state_snapshot_TIMESTAMP.txt
 ```
 
 ### Docker Management (dkcc)

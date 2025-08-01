@@ -9,7 +9,7 @@ import threading
 from typing import Optional
 from unittest.mock import patch, MagicMock
 
-from orchestrator.src.orchestrator import Orchestrator, OrchestratorConfig
+from src.orchestrator import Orchestrator, OrchestratorConfig
 
 
 class TestTwoAgentCommunication(unittest.TestCase):

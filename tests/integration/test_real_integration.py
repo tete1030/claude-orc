@@ -14,9 +14,9 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from orchestrator.src.orchestrator_enhanced import EnhancedOrchestrator
-from orchestrator.src.orchestrator import OrchestratorConfig
-from orchestrator.src.mcp_central_server import CentralMCPServer
+from src.orchestrator_enhanced import EnhancedOrchestrator
+from src.orchestrator import OrchestratorConfig
+from src.mcp_central_server import CentralMCPServer
 import asyncio
 import threading
 
@@ -121,8 +121,8 @@ class TestRealIntegration:
     
     def test_state_detection_with_real_tmux(self, cleanup_tmux):
         """Test state detection with REAL tmux content"""
-        from orchestrator.src.agent_state_monitor import AgentStateMonitor, AgentState
-        from orchestrator.src.tmux_manager import TmuxManager
+        from src.agent_state_monitor import AgentStateMonitor, AgentState
+        from src.tmux_manager import TmuxManager
         
         session_name = cleanup_tmux
         

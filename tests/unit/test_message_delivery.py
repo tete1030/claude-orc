@@ -6,9 +6,9 @@ import unittest
 from unittest.mock import MagicMock
 import time
 
-from orchestrator.src.message_delivery import MessageDeliverySystem, MessageNotification
-from orchestrator.src.agent_state_monitor import AgentState
-from orchestrator.src.orchestrator import Agent
+from src.message_delivery import MessageDeliverySystem, MessageNotification
+from src.agent_state_monitor import AgentState
+from src.orchestrator import Agent
 
 
 class TestMessageDeliverySystem(unittest.TestCase):

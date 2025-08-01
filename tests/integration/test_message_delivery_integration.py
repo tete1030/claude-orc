@@ -8,10 +8,10 @@ import asyncio
 import time
 from unittest.mock import MagicMock, patch, call
 
-from orchestrator.src.orchestrator_enhanced import EnhancedOrchestrator
-from orchestrator.src.orchestrator import OrchestratorConfig, Agent
-from orchestrator.src.mcp_central_server import CentralMCPServer
-from orchestrator.src.agent_state_monitor import AgentState
+from src.orchestrator_enhanced import EnhancedOrchestrator
+from src.orchestrator import OrchestratorConfig, Agent
+from src.mcp_central_server import CentralMCPServer
+from src.agent_state_monitor import AgentState
 
 
 class TestMessageDeliveryIntegration:

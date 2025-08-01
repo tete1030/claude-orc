@@ -40,7 +40,9 @@ class AgentStateMonitor:
     # IMPORTANT: DO NOT CHANGE THIS PATTERN! It works correctly as is.
     # The pattern ^. matches any character at the start, which includes all spinner characters
     BUSY_PATTERNS = [
-        r"^.\s+(Accomplishing|Actioning|Actualizing|Baking|Booping|Brewing|Calculating|Cerebrating|Channelling|Churning|Clauding|Coalescing|Cogitating|Combobulating|Computing|Concocting|Conjuring|Considering|Contemplating|Cooking|Crafting|Creating|Crunching|Deciphering|Deliberating|Determining|Discombobulating|Divining|Doing|Effecting|Elucidating|Enchanting|Envisioning|Finagling|Flibbertigibbeting|Forging|Forming|Frolicking|Generating|Germinating|Hatching|Herding|Honking|Hustling|Ideating|Imagining|Incubating|Inferring|Jiving|Manifesting|Marinating|Meandering|Moseying|Mulling|Mustering|Musing|Noodling|Percolating|Perusing|Philosophising|Pondering|Pontificating|Processing|Puttering|Puzzling|Reticulating|Ruminating|Scheming|Schlepping|Shimmying|Shucking|Simmering|Smooshing|Spelunking|Spinning|Stewing|Sussing|Synthesizing|Thinking|Tinkering|Transmuting|Unfurling|Unravelling|Vibing|Wandering|Whirring|Wibbling|Wizarding|Working|Wrangling)…",  # Processing indicator
+        # IMPORTANT: DO NOT CHANGE THIS PATTERN! It works correctly as is.
+        # The pattern ^. matches any character at the start, which includes all spinner characters
+        r"^.\s+(Accomplishing|Actioning|Actualizing|Analyzing|Baking|Booping|Brewing|Calculating|Cerebrating|Channelling|Churning|Clauding|Coalescing|Cogitating|Combobulating|Computing|Concocting|Conjuring|Considering|Contemplating|Cooking|Crafting|Creating|Crunching|Deciphering|Deliberating|Determining|Discombobulating|Divining|Doing|Effecting|Elucidating|Enchanting|Envisioning|Finagling|Flibbertigibbeting|Forging|Forming|Frolicking|Generating|Germinating|Hatching|Herding|Honking|Hustling|Ideating|Imagining|Incubating|Inferring|Jiving|Manifesting|Marinating|Meandering|Moseying|Mulling|Mustering|Musing|Noodling|Percolating|Perusing|Philosophising|Polishing|Pondering|Pontificating|Processing|Puttering|Puzzling|Reticulating|Reviewing|Ruminating|Scheming|Schlepping|Shimmying|Shucking|Simmering|Smooshing|Spelunking|Spinning|Stewing|Sussing|Synthesizing|Thinking|Tinkering|Transmuting|Unfurling|Unravelling|Vibing|Wandering|Whirring|Wibbling|Wizarding|Working|Wrangling)…",  # Processing indicator
     ]
     
     IDLE_PATTERNS = [
@@ -170,11 +172,22 @@ class AgentStateMonitor:
                     
                     if found_indicator:
                         # Verify no unrelated content between indicator and empty line
-                        # Allow only token count and interrupt messages
+                        # Allow only token count, interrupt messages, and message notifications
                         valid_busy = True
                         for check_idx in range(indicator_line + 1, prompt_box_top - 1):
                             line = lines[check_idx].strip()
-                            if line and not any(x in line for x in ['tokens', 'interrupt', '↓', 'esc']):
+                            # Allow expected lines between indicator and prompt box
+                            allowed_patterns = [
+                                'tokens',      # Token count
+                                'interrupt',   # Interrupt message
+                                '↓',          # Token arrow
+                                'esc',        # Escape message
+                                '[MESSAGE]',  # Message notifications
+                                'check_messages',  # Part of message notification
+                                'You have a new message',  # Message notification text
+                                'Reminder:'   # Idle reminder messages
+                            ]
+                            if line and not any(x in line for x in allowed_patterns):
                                 valid_busy = False
                                 break
                         

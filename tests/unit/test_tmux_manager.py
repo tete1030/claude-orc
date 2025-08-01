@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch, MagicMock, call
 import subprocess
-from orchestrator.src.tmux_manager import TmuxManager, TmuxPane
+from src.tmux_manager import TmuxManager, TmuxPane
 
 
 class TestTmuxManager(unittest.TestCase):

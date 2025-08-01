@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.tmux_manager import TmuxManager
 from src.agent_state_monitor import AgentStateMonitor
 
-def capture_snapshot(session_name="team-mcp-demo"):
+def capture_snapshot(session_name="devops-team-demo"):
     """Capture a complete snapshot of the orchestrator state"""
     
     # Check if session exists
@@ -39,10 +39,37 @@ def capture_snapshot(session_name="team-mcp-demo"):
         "panes": {}
     }
     
-    agents = ["Leader", "Researcher", "Writer"]
+    # Get number of panes
+    panes = tmux.list_panes()
+    pane_count = len(panes)
     
-    for i in range(3):
-        agent_name = agents[i]
+    # Define default agent names for known sessions
+    if session_name == "team-mcp-demo":
+        agents = ["Leader", "Researcher", "Writer"]
+    elif session_name.startswith("devops-team"):
+        agents = ["Architect", "Developer", "QA", "DevOps", "Docs"]
+    else:
+        # Try to get agent names from tmux pane variables
+        agents = []
+        for i in range(pane_count):
+            try:
+                result = subprocess.run([
+                    'tmux', 'show-options', '-p', '-t', f'{session_name}:0.{i}', '@agent_name'
+                ], capture_output=True, text=True)
+                if result.returncode == 0 and '=' in result.stdout:
+                    agent_name = result.stdout.strip().split('=', 1)[1]
+                    agents.append(agent_name)
+                else:
+                    agents.append(f"Agent{i}")
+            except:
+                agents.append(f"Agent{i}")
+    
+    # Ensure we have enough agent names
+    while len(agents) < pane_count:
+        agents.append(f"Agent{len(agents)}")
+    
+    for i in range(pane_count):
+        agent_name = agents[i] if i < len(agents) else f"Agent{i}"
         print(f"Capturing {agent_name}...", end='', flush=True)
         
         # Capture pane content
@@ -123,7 +150,7 @@ def main():
     print("Capturing orchestrator state snapshot...")
     
     # Parse arguments
-    session_name = "team-mcp-demo"
+    session_name = "devops-team-demo"
     if len(sys.argv) > 1:
         session_name = sys.argv[1]
     

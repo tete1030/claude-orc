@@ -13,8 +13,8 @@ import sys
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from orchestrator.src.orchestrator import OrchestratorConfig
-from orchestrator.src.tmux_manager import TmuxManager
+from src.orchestrator import OrchestratorConfig
+from src.tmux_manager import TmuxManager
 
 
 class TestE2EMessageFlow:
@@ -95,7 +95,7 @@ class TestE2EMessageFlow:
     
     def test_state_detection_with_real_output(self, tmux_session):
         """Test state detection with realistic Claude output"""
-        from orchestrator.src.agent_state_monitor import AgentStateMonitor
+        from src.agent_state_monitor import AgentStateMonitor
         
         tmux = TmuxManager(tmux_session)
         monitor = AgentStateMonitor(tmux)

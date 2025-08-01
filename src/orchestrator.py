@@ -161,7 +161,7 @@ class Orchestrator:
             
         # Create tmux session
         num_panes = len(self.agents)
-        if not self.tmux.create_session(num_panes):
+        if not self.tmux.create_session(num_panes, force=False):
             self.logger.error("Failed to create tmux session")
             return False
             

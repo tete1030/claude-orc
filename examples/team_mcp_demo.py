@@ -14,6 +14,7 @@ import asyncio
 import logging
 import threading
 import time
+import argparse
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -87,6 +88,14 @@ async def run_mcp_server(orchestrator, port=8765):
 
 
 def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="Team MCP Demo")
+    parser.add_argument("--force", action="store_true",
+                       help="Force kill existing tmux session if it exists")
+    parser.add_argument("--session", type=str, default="team-mcp-demo",
+                       help="Tmux session name (default: team-mcp-demo)")
+    args = parser.parse_args()
+    
     # Set up logging
     logging.basicConfig(
         level=logging.INFO,
@@ -95,12 +104,20 @@ def main():
     
     # Create orchestrator config
     config = OrchestratorConfig(
-        session_name="team-mcp-demo",
+        session_name=args.session,
         poll_interval=0.5
     )
     
     # Create orchestrator
     orchestrator = Orchestrator(config)
+    
+    # Override create_session method to use force parameter
+    original_create_session = orchestrator.tmux.create_session
+    def create_session_with_force(num_panes, force=None):
+        if force is None:
+            force = args.force
+        return original_create_session(num_panes, force=force)
+    orchestrator.tmux.create_session = create_session_with_force
     
     # Register team members
     orchestrator.register_agent(

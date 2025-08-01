@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, MagicMock, patch
 import time
 
-from orchestrator.src.orchestrator import (
+from src.orchestrator import (
     Orchestrator, OrchestratorConfig, Command
 )
 import sys

@@ -4,7 +4,7 @@ import unittest
 import json
 import tempfile
 import os
-from orchestrator.src.session_monitor import SessionMonitor, Message, Command
+from src.session_monitor import SessionMonitor, Message, Command
 
 
 class TestSessionMonitor(unittest.TestCase):
