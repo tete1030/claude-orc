@@ -164,6 +164,12 @@ Messages are now delivered with more flexible handling:
 - **BUSY/WRITING**: Message delivered with note to check "when convenient"
 - **ERROR/QUIT**: Not delivered
 
+**Broadcast Message Delivery**:
+- **Intelligent Delivery System**: Broadcast messages use the enhanced delivery system with state-aware routing
+- **BUSY/WRITING Agents**: Receive broadcast notifications with convenience notes
+- **ERROR/QUIT Agents**: Do not receive broadcast messages (filtered out)
+- **Base Orchestrator Compatibility**: Fallback behavior ensures compatibility with non-enhanced orchestrators
+
 **Notification Formats**: 
 - Standard: `[MESSAGE] You have a new message from Sender. Check it when convenient using 'check_messages' - no need to interrupt your current task unless urgent.`
 - Idle reminder: `[MESSAGE] Reminder: You have X unread message(s) in your mailbox. Use 'check_messages' to read them.`

@@ -8,7 +8,7 @@ import time
 import threading
 
 from src.orchestrator_enhanced import EnhancedOrchestrator
-from src.orchestrator import OrchestratorConfig, Agent
+from src.orchestrator import Orchestrator, OrchestratorConfig, Agent
 from src.agent_state_monitor import AgentState
 
 
@@ -22,7 +22,7 @@ class TestEnhancedOrchestrator(unittest.TestCase):
             poll_interval=0.1
         )
         
-        with patch('orchestrator.src.orchestrator.TmuxManager'):
+        with patch('src.orchestrator.TmuxManager'):
             self.orchestrator = EnhancedOrchestrator(self.config)
             self.orchestrator.tmux = MagicMock()
             
@@ -31,13 +31,21 @@ class TestEnhancedOrchestrator(unittest.TestCase):
         if hasattr(self.orchestrator, 'running'):
             self.orchestrator.running = False
             
-    @patch('orchestrator.src.orchestrator_enhanced.AgentStateMonitor')
-    @patch('orchestrator.src.orchestrator_enhanced.MessageDeliverySystem')
+    @patch('src.orchestrator_enhanced.AgentStateMonitor')
+    @patch('src.orchestrator_enhanced.MessageDeliverySystem')
     def test_start_initializes_enhanced_features(self, mock_delivery_class, mock_monitor_class):
         """Test that start initializes state monitor and message delivery"""
-        # Mock the base start method
-        with patch.object(EnhancedOrchestrator.__bases__[0], 'start', return_value=True):
-            result = self.orchestrator.start()
+        # Register an agent first (required for start)
+        self.orchestrator.agents = {
+            "TestAgent": Agent(name="TestAgent", session_id="test", pane_index=0,
+                             session_file="/tmp/test.jsonl", system_prompt="prompt")
+        }
+        
+        # Mock tmux operations
+        self.orchestrator.tmux.create_session.return_value = True
+        self.orchestrator.tmux.simple_launcher.launch_agent.return_value = "session-123"
+        
+        result = self.orchestrator.start()
             
         self.assertTrue(result)
         self.assertIsNotNone(self.orchestrator.state_monitor)
@@ -55,8 +63,17 @@ class TestEnhancedOrchestrator(unittest.TestCase):
         mock_thread = MagicMock()
         mock_thread_class.return_value = mock_thread
         
-        with patch.object(EnhancedOrchestrator.__bases__[0], 'start', return_value=True):
-            self.orchestrator.start()
+        # Register an agent first
+        self.orchestrator.agents = {
+            "TestAgent": Agent(name="TestAgent", session_id="test", pane_index=0,
+                             session_file="/tmp/test.jsonl", system_prompt="prompt")
+        }
+        
+        # Mock tmux operations
+        self.orchestrator.tmux.create_session.return_value = True
+        self.orchestrator.tmux.simple_launcher.launch_agent.return_value = "session-123"
+        
+        self.orchestrator.start()
             
         # Check thread was created with correct target
         mock_thread_class.assert_called_once()
@@ -84,15 +101,24 @@ class TestEnhancedOrchestrator(unittest.TestCase):
     def test_send_message_fallback_without_enhanced_delivery(self):
         """Test send_message_to_agent falls back when enhanced delivery not available"""
         self.orchestrator.message_delivery = None
-        self.orchestrator.send_to_agent = MagicMock(return_value=True)
         
-        result = self.orchestrator.send_message_to_agent(
-            "Agent1", "Agent2", "Test message"
-        )
+        # Set up agent for the test
+        self.orchestrator.agents = {
+            "Agent1": Agent(name="Agent1", session_id="s1", pane_index=0,
+                          session_file="/tmp/s1.jsonl", system_prompt="prompt")
+        }
+        self.orchestrator.mailbox = {}
+        
+        # Mock the parent's send_message_to_agent method
+        with patch.object(Orchestrator, 'send_message_to_agent', return_value=True) as mock_parent:
+            result = self.orchestrator.send_message_to_agent(
+                "Agent1", "Agent2", "Test message", "normal"
+            )
         
         self.assertTrue(result)
-        self.orchestrator.send_to_agent.assert_called_once_with(
-            "Agent1", "[FROM: Agent2] Test message"
+        # Verify parent method was called with correct args
+        mock_parent.assert_called_once_with(
+            "Agent1", "Agent2", "Test message", "normal"
         )
         
     def test_get_agent_state(self):

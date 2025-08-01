@@ -22,7 +22,7 @@ class TestMCPMessageDelivery(unittest.TestCase):
             poll_interval=0.1
         )
         
-        with patch('orchestrator.src.orchestrator.TmuxManager'):
+        with patch('src.orchestrator.TmuxManager'):
             self.orchestrator = EnhancedOrchestrator(self.config)
             self.orchestrator.tmux = MagicMock()
             
@@ -64,7 +64,7 @@ class TestMCPMessageDelivery(unittest.TestCase):
             poll_interval=0.1
         )
         
-        with patch('orchestrator.src.orchestrator.TmuxManager'):
+        with patch('src.orchestrator.TmuxManager'):
             # Use base Orchestrator instead of EnhancedOrchestrator
             from src.orchestrator import Orchestrator
             basic_orchestrator = Orchestrator(config)

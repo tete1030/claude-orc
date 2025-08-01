@@ -69,7 +69,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("already registered", str(cm.exception))
         self.assertEqual(len(self.orchestrator.agents), 1)
         
-    @patch('orchestrator.src.orchestrator.SessionMonitor')
+    @patch('src.orchestrator.SessionMonitor')
     @patch('os.makedirs')
     def test_start_success(self, mock_makedirs, mock_monitor_class):
         """Test successful orchestrator start"""
@@ -103,7 +103,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIsNotNone(self.orchestrator.monitors_thread)
         
         # Verify tmux operations
-        mock_tmux.create_session.assert_called_once_with(2)
+        mock_tmux.create_session.assert_called_once_with(2, force=False)
         self.assertEqual(mock_tmux.set_pane_title.call_count, 2)
         self.assertEqual(mock_tmux.launch_claude_in_pane.call_count, 2)
         
@@ -449,7 +449,7 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("agent1", all_status)
         self.assertIn("agent2", all_status)
         
-    @patch('orchestrator.src.orchestrator.SessionMonitor')
+    @patch('src.orchestrator.SessionMonitor')
     @patch('os.makedirs')
     def test_monitor_loop_processes_commands(self, mock_makedirs, mock_monitor_class):
         """Test monitor loop processes commands from agents"""

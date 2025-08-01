@@ -38,15 +38,28 @@ class TestTmuxManager(unittest.TestCase):
     @patch('subprocess.run')
     def test_create_session_success(self, mock_run):
         """Test successful session creation"""
-        mock_run.return_value = MagicMock(returncode=0)
+        # Create enough mock returns for all tmux commands
+        # We need ~21 commands for a 2-pane session
+        mock_returns = [MagicMock(returncode=1)]  # has-session returns 1 (doesn't exist)
+        mock_returns.extend([MagicMock(returncode=0)] * 25)  # All other commands succeed
+        mock_run.side_effect = mock_returns
         
         result = self.tmux_manager.create_session(2)
         
         self.assertTrue(result)
         # Check that tmux commands were called
         calls = mock_run.call_args_list
-        # Should have: has-session, kill-session (if exists), new-session, split-window, select-layout
-        self.assertGreaterEqual(len(calls), 4)
+        # Should have at least: has-session, new-session, various set-options, 
+        # bind-keys, split-window, select-layout
+        self.assertGreaterEqual(len(calls), 15)
+        
+        # Verify key commands were called
+        has_session_call = calls[0]
+        self.assertIn("has-session", str(has_session_call))
+        
+        # Find new-session call
+        new_session_calls = [c for c in calls if "new-session" in str(c)]
+        self.assertEqual(len(new_session_calls), 1)
         
     @patch('subprocess.run')
     def test_create_session_failure(self, mock_run):
@@ -68,7 +81,7 @@ class TestTmuxManager(unittest.TestCase):
         # Now sends two commands: text then Enter
         self.assertEqual(mock_run.call_count, 2)
         mock_run.assert_any_call(
-            ["tmux", "send-keys", "-t", "test-session:0.0", "echo test"],
+            ["tmux", "send-keys", "-t", "test-session:0.0", "-l", "echo test"],
             check=True, capture_output=False, text=False
         )
         mock_run.assert_any_call(

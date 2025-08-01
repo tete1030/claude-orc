@@ -528,6 +528,45 @@ class Orchestrator:
             
         return self.tmux.send_to_pane(agent.pane_index, message)
         
+    def send_message_to_agent(self, to_agent: str, from_agent: str, 
+                            message_content: str, priority: str = "normal") -> bool:
+        """Send a message to another agent - base implementation adds to mailbox
+        
+        Args:
+            to_agent: Name of the recipient agent
+            from_agent: Name of the sending agent
+            message_content: The message content
+            priority: Message priority (default: "normal")
+            
+        Returns:
+            bool: True if message was successfully added to mailbox
+        """
+        with self._mailbox_lock:
+            if to_agent not in self.agents:
+                self.logger.error(f"Agent {to_agent} not found")
+                return False
+                
+            message = {
+                'from': from_agent,
+                'to': to_agent,
+                'message': message_content,
+                'priority': priority,
+                'timestamp': time.time()
+            }
+            
+            if to_agent not in self.mailbox:
+                self.mailbox[to_agent] = []
+            self.mailbox[to_agent].append(message)
+            
+            self.logger.info(f"Message from {from_agent} to {to_agent} added to mailbox")
+            
+            # Optionally notify the agent (similar to _handle_send_message)
+            # This provides basic notification even without enhanced delivery
+            notification = f"[MESSAGE] You have a new message from {from_agent}. Check your mailbox with 'mailbox_check'."
+            self.tmux.send_to_pane(self.agents[to_agent].pane_index, notification)
+            
+            return True
+        
     def get_agent_status(self, agent_name: str) -> Optional[Dict[str, Any]]:
         """Get status of a specific agent"""
         with self._agents_lock:

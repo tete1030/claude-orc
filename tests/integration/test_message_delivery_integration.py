@@ -25,7 +25,7 @@ class TestMessageDeliveryIntegration:
             poll_interval=0.1
         )
         
-        with patch('orchestrator.src.orchestrator.TmuxManager') as mock_tmux_class:
+        with patch('src.orchestrator.TmuxManager') as mock_tmux_class:
             orchestrator = EnhancedOrchestrator(config)
             
             # Mock tmux instance
@@ -42,7 +42,7 @@ class TestMessageDeliveryIntegration:
             orchestrator.mailbox = {"Leader": [], "Researcher": []}
             
             # Initialize enhanced features by mocking the parent start
-            with patch('orchestrator.src.orchestrator.Orchestrator.start', return_value=True):
+            with patch('src.orchestrator.Orchestrator.start', return_value=True):
                 orchestrator.start()
             
             # Mock tmux methods

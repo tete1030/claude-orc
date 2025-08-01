@@ -153,7 +153,7 @@ class TestErrorHandling(unittest.TestCase):
             
         self.assertIn("Unknown agent", str(cm.exception))
         
-    @patch('orchestrator.src.orchestrator.SessionMonitor')
+    @patch('src.orchestrator.SessionMonitor')
     @patch('os.makedirs')
     def test_monitor_loop_exception_handling(self, mock_makedirs, mock_monitor_class):
         """Test that monitor loop handles exceptions without crashing"""

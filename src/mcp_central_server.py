@@ -429,16 +429,16 @@ class CentralMCPServer:
     def _broadcast_message(self, from_agent: str, message: str) -> str:
         """Broadcast to all agents"""
         count = 0
-        with self.orchestrator._mailbox_lock:
-            for agent_name in self.orchestrator.agents:
-                if agent_name != from_agent:
-                    msg_data = {
-                        "from": from_agent,
-                        "to": "all",
-                        "message": f"[BROADCAST] {message}",
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    self.orchestrator.mailbox[agent_name].append(msg_data)
+        broadcast_msg = f"[BROADCAST] {message}"
+        
+        # Now we can always use send_message_to_agent since it's in the base class
+        for agent_name in self.orchestrator.agents:
+            if agent_name != from_agent:
+                # This will use base implementation or enhanced if available
+                success = self.orchestrator.send_message_to_agent(
+                    agent_name, from_agent, broadcast_msg, priority="normal"
+                )
+                if success:
                     count += 1
                     
         return f"Broadcast sent to {count} agents"

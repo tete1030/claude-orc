@@ -55,8 +55,8 @@ class TestMessageDeliverySystem(unittest.TestCase):
         self.assertIn("Agent1", self.mock_orchestrator.mailbox)
         self.assertEqual(len(self.mock_orchestrator.mailbox["Agent1"]), 1)
         
-    def test_send_message_to_busy_agent_queues(self):
-        """Test sending message to busy agent queues it"""
+    def test_send_message_to_busy_agent_notifies(self):
+        """Test sending message to busy agent sends notification"""
         self.mock_state_monitor.update_agent_state.return_value = AgentState.BUSY
         
         result = self.delivery.send_message_to_agent(
@@ -64,8 +64,13 @@ class TestMessageDeliverySystem(unittest.TestCase):
         )
         
         self.assertTrue(result)
-        # Should queue the message
-        self.mock_state_monitor.queue_message_for_agent.assert_called_once()
+        # Should send notification even though busy
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        self.assertEqual(len(calls), 1)
+        notification = calls[0][0][1]
+        self.assertIn("[MESSAGE]", notification)
+        self.assertIn("check_messages", notification)
+        self.assertIn("Agent2", notification)
         # Should also add to mailbox
         self.assertIn("Agent1", self.mock_orchestrator.mailbox)
         self.assertEqual(len(self.mock_orchestrator.mailbox["Agent1"]), 1)
@@ -115,20 +120,24 @@ class TestMessageDeliverySystem(unittest.TestCase):
         
     def test_check_and_deliver_pending_messages(self):
         """Test checking and delivering pending messages"""
-        # Set up agent as idle with pending messages
+        # Set up agent as idle with unread messages in mailbox
         self.mock_state_monitor.update_agent_state.return_value = AgentState.IDLE
         self.mock_state_monitor.has_pending_messages.return_value = True
         self.mock_state_monitor.get_pending_messages.return_value = [
-            {'from': 'Agent2', 'content': 'Message 1'},
-            {'from': 'Agent2', 'content': 'Message 2'}
+            {'from': 'Agent2', 'to': 'Agent1', 'message': 'Message 1'},
+            {'from': 'Agent2', 'to': 'Agent1', 'message': 'Message 2'}
+        ]
+        # Set up mailbox with existing messages
+        self.mock_orchestrator.mailbox["Agent1"] = [
+            {'from': 'Agent2', 'message': 'Old message'}
         ]
         
         self.delivery.check_and_deliver_pending_messages()
         
-        # Should notify about pending messages
+        # Should send idle reminder about unread messages
         calls = self.mock_tmux.send_to_pane.call_args_list
         self.assertTrue(any("[MESSAGE]" in str(call) for call in calls))
-        self.assertTrue(any("2 messages" in str(call) for call in calls))
+        self.assertTrue(any("Reminder" in str(call) for call in calls))
         
     def test_send_text_to_agent_input(self):
         """Test sending text to agent input field"""
@@ -180,20 +189,18 @@ class TestMessageDeliverySystem(unittest.TestCase):
         self.assertIn("From Agent2", calls[0][0][1])
         
     def test_message_priority_preserved(self):
-        """Test that message priority is preserved"""
+        """Test that message priority is preserved in mailbox"""
         self.mock_state_monitor.update_agent_state.return_value = AgentState.BUSY
         
         self.delivery.send_message_to_agent(
             "Agent1", "Agent2", "Urgent task", "high"
         )
         
-        # Check message was queued with priority
-        call_args = self.mock_state_monitor.queue_message_for_agent.call_args
-        message = call_args[0][1]
-        self.assertEqual(message['priority'], 'high')
-        
-        # Check mailbox also has priority
+        # Check mailbox has priority preserved
+        self.assertIn("Agent1", self.mock_orchestrator.mailbox)
         self.assertEqual(self.mock_orchestrator.mailbox["Agent1"][0]['priority'], 'high')
+        # Check notification was sent despite busy state
+        self.mock_tmux.send_to_pane.assert_called_once()
 
 
 if __name__ == '__main__':

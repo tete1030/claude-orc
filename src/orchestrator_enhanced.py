@@ -264,9 +264,9 @@ class EnhancedOrchestrator(Orchestrator):
             
     def send_message_to_agent(self, to_agent: str, from_agent: str, 
                             message_content: str, priority: str = "normal") -> bool:
-        """Send a message to another agent"""
+        """Send a message to another agent - uses intelligent delivery when available"""
         if not self.message_delivery:
-            # Fallback to direct mailbox delivery
+            # Fallback to parent's implementation
             return super().send_message_to_agent(to_agent, from_agent, message_content, priority)
             
         return self.message_delivery.send_message_to_agent(to_agent, from_agent, message_content, priority)
