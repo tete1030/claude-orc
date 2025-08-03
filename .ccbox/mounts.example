@@ -1,7 +1,7 @@
 # CCBox (Claude Code Box) Environment Configuration
 # 
 # This file allows you to configure custom volume mounts for the Docker container.
-# Copy this file to .ccbox.env and uncomment/modify the mounts you need.
+# Copy this file to .ccbox/mounts and uncomment/modify the mounts you need.
 #
 # Format: MOUNT_<NAME>="/host/path:/container/path:options"
 # 

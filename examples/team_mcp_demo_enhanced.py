@@ -29,7 +29,7 @@ from src.orchestrator_enhanced import EnhancedOrchestrator
 from src.orchestrator import OrchestratorConfig
 from src.mcp_central_server import CentralMCPServer
 from src.claude_launcher_config import ClaudeLauncherConfig
-from src.session_manager import SessionManager, AgentInfo
+from src.team_context_manager import TeamContextManager, AgentInfo
 
 
 # Team member prompts - Updated to NOT tell agents to check messages regularly
@@ -146,7 +146,7 @@ def main():
     parser.add_argument("--session", type=str, default="team-mcp-demo",
                        help="Tmux session name (default: team-mcp-demo)")
     parser.add_argument("--session-name", type=str,
-                       help="Name for this team session (for container tracking)")
+                       help="Name for this team context (for container tracking)")
     parser.add_argument("--resume", action="store_true",
                        help="Resume an existing session with persistent containers")
     args = parser.parse_args()
@@ -159,16 +159,16 @@ def main():
     )
     
     # Initialize session manager
-    session_manager = SessionManager()
-    team_session = None
+    team_context_manager = TeamContextManager()
+    team_context = None
     
     # Handle session resume or creation
     if args.resume and args.session_name:
         print(f"Resuming session: {args.session_name}")
         try:
-            team_session = session_manager.resume_session(args.session_name)
+            team_context = team_context_manager.resume_context(args.session_name)
             # Override settings from saved session
-            args.session = team_session.tmux_session
+            args.session = team_context.tmux_session
             print(f"Resumed session with tmux: {args.session}")
         except ValueError as e:
             print(f"ERROR: {e}")
@@ -354,8 +354,8 @@ Enhanced Team MCP Demo - Collaborative AI Agents
             ]
             
             # Create session in registry
-            team_session = session_manager.create_session(
-                session_name=args.session_name,
+            team_context = team_context_manager.create_context(
+                context_name=args.session_name,
                 agents=agents_info,
                 tmux_session=args.session,
                 orchestrator_config={

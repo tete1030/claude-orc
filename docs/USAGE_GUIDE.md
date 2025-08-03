@@ -27,10 +27,10 @@ python examples/team_mcp_demo.py
 # Enhanced demo with state monitoring
 python examples/team_mcp_demo_enhanced.py
 
-# With persistent session
-python examples/team_mcp_demo_enhanced.py --session-name my-project
+# With persistent team context
+python examples/team_mcp_demo_enhanced.py --context-name my-project
 
-# Resume persistent session
+# Resume persistent team context
 python examples/team_mcp_demo_enhanced.py --resume my-project
 
 # With custom model
@@ -44,7 +44,7 @@ The orchestrator detects existing tmux sessions to prevent accidental overwrites
   1. Attach to existing: `tmux attach -t <session-name>`
   2. Kill existing: `tmux kill-session -t <session-name>`
   3. Use `--force` flag to auto-kill existing session
-  4. Use `--session <name>` to specify a different session name
+  4. Use `--context <name>` to specify a different context name
 
 Example usage:
 ```bash
@@ -54,8 +54,8 @@ python examples/team_mcp_demo.py
 # Force kill existing session
 python examples/team_mcp_demo.py --force
 
-# Use different session name
-python examples/team_mcp_demo.py --session my-custom-session
+# Use different context name
+python examples/team_mcp_demo.py --context my-custom-context
 ```
 
 ## Interacting with Agents
@@ -117,20 +117,20 @@ python scripts/diagnose_agent_states.py <session-name> --single
 # Saves to .temp/state_snapshot_TIMESTAMP.txt
 ```
 
-## Session Management (ccorc)
+## Team Context Management (ccorc)
 
 ```bash
-# List all team sessions
+# List all team contexts
 ccorc list
 
-# Check team session health
+# Check team context health
 ccorc health my-project
 
-# Clean up team sessions
+# Clean up team contexts
 ccorc cleanup --interactive
 ccorc cleanup --remove my-project
 
-# Export team session metadata
+# Export team context metadata
 ccorc export my-project --output ./backup/
 ```
 

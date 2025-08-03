@@ -51,7 +51,7 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 #### Session Orchestration
 - **Base Orchestrator** (`orchestrator.py`): Core agent lifecycle and session management
 - **Enhanced Orchestrator** (`orchestrator_enhanced.py`): Adds state monitoring and intelligent delivery
-- **Session Manager** (`session_manager.py`): Persistent session registry and metadata
+- **Team Context Manager** (`team_context_manager.py`): Persistent team context registry and metadata
 - **Tmux Manager** (`tmux_manager.py`): Terminal session and pane coordination
 
 #### Containerization Layer
@@ -78,7 +78,7 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 - **`message_delivery.py`**: Intelligent message routing - handles state-aware delivery decisions
 - **`mcp_central_server.py`**: MCP server implementation - handles all inter-agent communication
 - **`tmux_manager.py`**: Terminal session management - abstracts tmux operations
-- **`session_manager.py`**: Persistent session registry - handles session metadata and recovery
+- **`team_context_manager.py`**: Persistent team context registry - handles team context metadata and recovery
 
 #### Examples (`examples/`)
 - **`team_mcp_demo.py`**: Basic orchestrator example - good starting point
@@ -91,7 +91,7 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 
 #### CLI Tools (`bin/`)
 - **`ccdk`**: Docker container management - handles ccbox lifecycle
-- **`ccorc`**: Team session management - handles persistent sessions
+- **`ccorc`**: Team context management - handles persistent team contexts
 - **`claude-bg`**: Background process manager - essential for non-blocking operations
 
 #### Diagnostic Tools (`scripts/`)
@@ -365,7 +365,7 @@ python scripts/monitor_live_states.py <session>  # Real-time validation
 - Test with real tmux sessions and Claude instances
 - Validate state transitions under load
 - Test message delivery across different states
-- Verify session persistence across container restarts
+- Verify team context persistence across container restarts
 
 ## Common Development Pitfalls and Solutions
 

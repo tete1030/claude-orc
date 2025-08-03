@@ -2,7 +2,7 @@
 """
 Session Management CLI Utility
 
-Command-line tool for managing Claude Multi-Agent Orchestrator persistent sessions.
+Command-line tool for managing Claude Multi-Agent Orchestrator persistent contexts.
 Provides session discovery, health monitoring, and cleanup capabilities.
 """
 
@@ -20,11 +20,11 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Import core SessionManager
+# Import core TeamContextManager
 try:
-    from src.session_manager import SessionManager as CoreSessionManager, TeamSession, AgentInfo
+    from src.team_context_manager import TeamContextManager as CoreTeamContextManager, TeamContext, AgentInfo
 except ImportError:
-    print("Error: Could not import core SessionManager. Ensure session_manager.py is in path.", file=sys.stderr)
+    print("Error: Could not import core TeamContextManager. Ensure team_context_manager.py is in path.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -39,8 +39,8 @@ class ContainerInfo:
     
     
 @dataclass 
-class SessionInfo:
-    """Information about a team session"""
+class ContextInfo:
+    """Information about a team context"""
     name: str
     containers: List[ContainerInfo]
     tmux_session: Optional[str]
@@ -54,11 +54,11 @@ class SessionCLIManager:
     
     def __init__(self):
         self.container_prefix = "ccbox-"
-        self.core_manager = CoreSessionManager()
+        self.core_manager = CoreTeamContextManager()
         
-    def discover_sessions(self) -> Dict[str, SessionInfo]:
-        """Discover all team sessions from running containers"""
-        sessions = {}
+    def discover_contexts(self) -> Dict[str, ContextInfo]:
+        """Discover all team contexts from running containers"""
+        contexts = {}
         
         try:
             # Get all ccbox containers
@@ -79,8 +79,8 @@ class SessionCLIManager:
                 container_name, status, created = parts[0], parts[1], parts[2]
                 
                 # Parse container name to extract session and role
-                session_name, agent_role = self._parse_container_name(container_name)
-                if not session_name:
+                context_name, agent_role = self._parse_container_name(container_name)
+                if not context_name:
                     continue
                     
                 # Determine if container is running
@@ -95,9 +95,9 @@ class SessionCLIManager:
                 )
                 
                 # Add to session
-                if session_name not in sessions:
-                    sessions[session_name] = SessionInfo(
-                        name=session_name,
+                if context_name not in contexts:
+                    contexts[context_name] = ContextInfo(
+                        name=context_name,
                         containers=[],
                         tmux_session=None,
                         created=None,
@@ -105,22 +105,22 @@ class SessionCLIManager:
                         running_containers=0
                     )
                 
-                sessions[session_name].containers.append(container_info)
-                sessions[session_name].total_containers += 1
+                contexts[context_name].containers.append(container_info)
+                contexts[context_name].total_containers += 1
                 if running:
-                    sessions[session_name].running_containers += 1
+                    contexts[context_name].running_containers += 1
                     
                 # Set session creation time to earliest container
-                if not sessions[session_name].created or created < sessions[session_name].created:
-                    sessions[session_name].created = created
+                if not contexts[context_name].created or created < contexts[context_name].created:
+                    contexts[context_name].created = created
                     
             # Check for tmux sessions
-            self._discover_tmux_sessions(sessions)
+            self._discover_tmux_sessions(contexts)
             
         except subprocess.CalledProcessError as e:
-            print(f"Error discovering sessions: {e}", file=sys.stderr)
+            print(f"Error discovering contexts: {e}", file=sys.stderr)
             
-        return sessions
+        return contexts
     
     def _parse_container_name(self, container_name: str) -> Tuple[Optional[str], Optional[str]]:
         """Parse container name to extract session name and agent role"""
@@ -138,11 +138,11 @@ class SessionCLIManager:
         # Agent role is the last part
         agent_role = parts[-1]
         # Session name is everything before the last dash
-        session_name = '-'.join(parts[:-1])
+        context_name = '-'.join(parts[:-1])
         
-        return session_name, agent_role
+        return context_name, agent_role
     
-    def _discover_tmux_sessions(self, sessions: Dict[str, SessionInfo]):
+    def _discover_tmux_sessions(self, contexts: Dict[str, ContextInfo]):
         """Discover related tmux sessions"""
         try:
             result = subprocess.run([
@@ -151,31 +151,31 @@ class SessionCLIManager:
             
             tmux_sessions = result.stdout.strip().split('\n')
             
-            for session_name in sessions:
-                # Look for tmux session that matches or contains the team session name
+            for context_name in contexts:
+                # Look for tmux session that matches or contains the team context name
                 for tmux_session in tmux_sessions:
-                    if tmux_session and (session_name in tmux_session or tmux_session in session_name):
-                        sessions[session_name].tmux_session = tmux_session
+                    if tmux_session and (context_name in tmux_session or tmux_session in context_name):
+                        contexts[context_name].tmux_session = tmux_session
                         break
                         
         except subprocess.CalledProcessError:
             # tmux might not be running or no sessions exist
             pass
     
-    def get_session_details(self, session_name: str) -> Optional[SessionInfo]:
+    def get_context_details(self, context_name: str) -> Optional[ContextInfo]:
         """Get detailed information about a specific session"""
         # First check if session is registered
         try:
-            registered = self.core_manager.list_sessions()
-            if session_name not in registered:
-                # Not a registered team session
+            registered = self.core_manager.list_contexts()
+            if context_name not in registered:
+                # Not a registered team context
                 return None
                 
-            session_data = registered[session_name]
+            session_data = registered[context_name]
             
             # Get live container information for this session
-            session_info = SessionInfo(
-                name=session_name,
+            session_info = ContextInfo(
+                name=context_name,
                 containers=[],
                 tmux_session=session_data.get('tmux_session'),
                 created=session_data.get('created_at'),
@@ -225,13 +225,13 @@ class SessionCLIManager:
             print(f"Error getting session details: {e}", file=sys.stderr)
             return None
     
-    def list_sessions(self) -> Dict[str, SessionInfo]:
-        """List registered team sessions from the session registry"""
-        sessions = {}
+    def list_contexts(self) -> Dict[str, ContextInfo]:
+        """List registered team contexts from the context registry"""
+        contexts = {}
         
         try:
-            # Get only registered sessions from core manager
-            registered = self.core_manager.list_sessions()
+            # Get only registered contexts from core manager
+            registered = self.core_manager.list_contexts()
             
             for name, session_data in registered.items():
                 # Check container status for each registered session
@@ -252,8 +252,8 @@ class SessionCLIManager:
                     except:
                         pass
                 
-                # Create SessionInfo for registered session
-                sessions[name] = SessionInfo(
+                # Create ContextInfo for registered session
+                contexts[name] = ContextInfo(
                     name=name,
                     containers=[],  # Don't populate full container list for simple listing
                     tmux_session=session_data.get('tmux_session'),
@@ -265,16 +265,16 @@ class SessionCLIManager:
         except Exception as e:
             print(f"Warning: Could not load registry data: {e}", file=sys.stderr)
             
-        return sessions
+        return contexts
     
-    def health_check_session(self, session_name: str) -> Dict[str, any]:
+    def health_check_context(self, context_name: str) -> Dict[str, any]:
         """Perform health check on session components"""
-        session = self.get_session_details(session_name)
+        context = self.get_context_details(context_name)
         if not session:
-            return {"error": f"Session '{session_name}' not found"}
+            return {"error": f"Context '{context_name}' not found"}
             
         health_status = {
-            "session_name": session_name,
+            "context_name": context_name,
             "overall_health": "healthy",
             "containers": {},
             "tmux_session": None,
@@ -282,7 +282,7 @@ class SessionCLIManager:
         }
         
         # Check container health
-        for container in session.containers:
+        for container in context.containers:
             container_health = self._check_container_health(container)
             health_status["containers"][container.name] = container_health
             
@@ -291,8 +291,8 @@ class SessionCLIManager:
                 health_status["issues"].extend(container_health.get("issues", []))
         
         # Check tmux session
-        if session.tmux_session:
-            tmux_health = self._check_tmux_health(session.tmux_session)
+        if context.tmux_session:
+            tmux_health = self._check_tmux_health(context.tmux_session)
             health_status["tmux_session"] = tmux_health
             
             if tmux_health["status"] != "healthy":
@@ -361,7 +361,7 @@ class SessionCLIManager:
     def _check_tmux_health(self, tmux_session: str) -> Dict[str, any]:
         """Check health of tmux session"""
         health = {
-            "session_name": tmux_session,
+            "context_name": tmux_session,
             "status": "healthy",
             "exists": False,
             "panes": 0,
@@ -395,20 +395,20 @@ class SessionCLIManager:
             
         return health
     
-    def cleanup_session(self, session_name: str, force: bool = False) -> bool:
-        """Clean up a team session"""
-        session = self.get_session_details(session_name)
+    def cleanup_context(self, context_name: str, force: bool = False) -> bool:
+        """Clean up a team context"""
+        context = self.get_context_details(context_name)
         if not session:
-            print(f"Session '{session_name}' not found")
+            print(f"Context '{context_name}' not found")
             return False
             
-        print(f"\nSession cleanup for: {session_name}")
-        print(f"Containers to remove: {len(session.containers)}")
-        for container in session.containers:
+        print(f"\nContext cleanup for: {context_name}")
+        print(f"Containers to remove: {len(context.containers)}")
+        for container in context.containers:
             print(f"  - {container.name} ({container.status})")
             
-        if session.tmux_session:
-            print(f"Tmux session to remove: {session.tmux_session}")
+        if context.tmux_session:
+            print(f"Tmux session to remove: {context.tmux_session}")
             
         if not force:
             confirm = input("\nThis will permanently delete all session data. Continue? (type 'yes'): ")
@@ -419,7 +419,7 @@ class SessionCLIManager:
         success = True
         
         # Stop and remove containers
-        for container in session.containers:
+        for container in context.containers:
             try:
                 if container.running:
                     print(f"Stopping {container.name}...")
@@ -435,10 +435,10 @@ class SessionCLIManager:
                 success = False
                 
         # Remove tmux session
-        if session.tmux_session:
+        if context.tmux_session:
             try:
-                print(f"Removing tmux session {session.tmux_session}...")
-                subprocess.run(["tmux", "kill-session", "-t", session.tmux_session], 
+                print(f"Removing tmux session {context.tmux_session}...")
+                subprocess.run(["tmux", "kill-session", "-t", context.tmux_session], 
                              capture_output=True, check=True)
             except subprocess.CalledProcessError as e:
                 print(f"Error removing tmux session: {e}")
@@ -446,33 +446,33 @@ class SessionCLIManager:
         
         # Remove from core registry
         try:
-            self.core_manager.delete_session(session_name)
-            print(f"Removed session '{session_name}' from registry")
+            self.core_manager.delete_context(context_name)
+            print(f"Removed session '{context_name}' from registry")
         except Exception as e:
             print(f"Warning: Could not remove from registry: {e}")
                 
         if success:
-            print(f"\nSession '{session_name}' cleanup completed successfully")
+            print(f"\nSession '{context_name}' cleanup completed successfully")
         else:
-            print(f"\nSession '{session_name}' cleanup completed with some errors")
+            print(f"\nSession '{context_name}' cleanup completed with some errors")
             
         return success
     
-    def export_session_config(self, session_name: str, output_file: str) -> bool:
+    def export_session_config(self, context_name: str, output_file: str) -> bool:
         """Export session configuration to file"""
-        session = self.get_session_details(session_name)
+        context = self.get_context_details(context_name)
         if not session:
-            print(f"Session '{session_name}' not found")
+            print(f"Context '{context_name}' not found")
             return False
             
         config = {
-            "session_name": session_name,
+            "context_name": context_name,
             "export_date": datetime.now().isoformat(),
-            "containers": [asdict(container) for container in session.containers],
-            "tmux_session": session.tmux_session,
+            "containers": [asdict(container) for container in context.containers],
+            "tmux_session": context.tmux_session,
             "metadata": {
-                "total_containers": session.total_containers,
-                "running_containers": session.running_containers
+                "total_containers": context.total_containers,
+                "running_containers": context.running_containers
             }
         }
         
@@ -491,7 +491,7 @@ class SessionCLIManager:
             with open(config_file, 'r') as f:
                 config = json.load(f)
                 
-            print(f"Configuration loaded for session: {config['session_name']}")
+            print(f"Configuration loaded for session: {config['context_name']}")
             print(f"Export date: {config['export_date']}")
             print(f"Containers: {len(config['containers'])}")
             
@@ -506,35 +506,35 @@ class SessionCLIManager:
             return False
 
 
-def print_sessions_table(sessions: Dict[str, SessionInfo]):
+def print_sessions_table(contexts: Dict[str, ContextInfo]):
     """Print sessions in a formatted table"""
-    if not sessions:
-        print("No team sessions found")
+    if not contexts:
+        print("No team contexts found")
         return
         
     print(f"\n{'Session Name':<25} {'Containers':<12} {'Running':<8} {'Tmux':<15} {'Created':<20}")
     print("-" * 85)
     
-    for session_name, session in sorted(sessions.items()):
-        tmux_status = "✓" if session.tmux_session else "-"
-        created = session.created[:19] if session.created else "Unknown"
+    for context_name, context in sorted(contexts.items()):
+        tmux_status = "✓" if context.tmux_session else "-"
+        created = context.created[:19] if context.created else "Unknown"
         
-        print(f"{session_name:<25} {session.total_containers:<12} {session.running_containers:<8} {tmux_status:<15} {created:<20}")
+        print(f"{context_name:<25} {context.total_containers:<12} {context.running_containers:<8} {tmux_status:<15} {created:<20}")
 
 
-def print_session_details(session: SessionInfo):
+def print_context_details(context: ContextInfo):
     """Print detailed session information"""
-    print(f"\nSession: {session.name}")
-    print(f"Created: {session.created}")
-    print(f"Containers: {session.total_containers} total, {session.running_containers} running")
+    print(f"\nSession: {context.name}")
+    print(f"Created: {context.created}")
+    print(f"Containers: {context.total_containers} total, {context.running_containers} running")
     
-    if session.tmux_session:
-        print(f"Tmux session: {session.tmux_session}")
+    if context.tmux_session:
+        print(f"Tmux session: {context.tmux_session}")
     else:
         print("Tmux session: None")
         
     print("\nContainers:")
-    for container in session.containers:
+    for container in context.containers:
         status_icon = "🟢" if container.running else "🔴"
         print(f"  {status_icon} {container.name}")
         print(f"    Role: {container.agent_role}")
@@ -547,28 +547,28 @@ def main():
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # List sessions
-    list_parser = subparsers.add_parser('list', help='List all team sessions')
+    list_parser = subparsers.add_parser('list', help='List all team contexts')
     list_parser.add_argument('--detailed', '-d', action='store_true', 
                            help='Show detailed information')
     
     # Show session info
     info_parser = subparsers.add_parser('info', help='Show detailed session information')
-    info_parser.add_argument('session_name', help='Name of the session')
+    info_parser.add_argument('context_name', help='Name of the session')
     
     # Health check
     health_parser = subparsers.add_parser('health', help='Check session health')
-    health_parser.add_argument('session_name', help='Name of the session')
+    health_parser.add_argument('context_name', help='Name of the session')
     health_parser.add_argument('--json', action='store_true', help='Output as JSON')
     
     # Cleanup
     clean_parser = subparsers.add_parser('clean', help='Clean up a session')
-    clean_parser.add_argument('session_name', help='Name of the session')
+    clean_parser.add_argument('context_name', help='Name of the session')
     clean_parser.add_argument('--force', '-f', action='store_true', 
                             help='Skip confirmation prompt')
     
     # Export
     export_parser = subparsers.add_parser('export', help='Export session configuration')
-    export_parser.add_argument('session_name', help='Name of the session')
+    export_parser.add_argument('context_name', help='Name of the session')
     export_parser.add_argument('output_file', help='Output file path')
     
     # Import
@@ -584,30 +584,30 @@ def main():
     manager = SessionCLIManager()
     
     if args.command == 'list':
-        sessions = manager.list_sessions()
+        contexts = manager.list_contexts()
         if args.detailed:
-            for session in sessions.values():
-                print_session_details(session)
+            for context in contexts.values():
+                print_context_details(context)
                 print()
         else:
-            print_sessions_table(sessions)
+            print_sessions_table(contexts)
             
     elif args.command == 'info':
-        session = manager.get_session_details(args.session_name)
-        if session:
-            print_session_details(session)
+        context = manager.get_context_details(args.context_name)
+        if context:
+            print_context_details(context)
         else:
-            print(f"Session '{args.session_name}' not found")
+            print(f"Context '{args.context_name}' not found")
             
     elif args.command == 'health':
-        health = manager.health_check_session(args.session_name)
+        health = manager.health_check_context(args.context_name)
         if args.json:
             print(json.dumps(health, indent=2))
         else:
             if "error" in health:
                 print(health["error"])
             else:
-                print(f"Session: {health['session_name']}")
+                print(f"Session: {health['context_name']}")
                 print(f"Overall health: {health['overall_health']}")
                 
                 if health['issues']:
@@ -621,10 +621,10 @@ def main():
                     print(f"  {status_icon} {name}: {container_health['status']}")
                     
     elif args.command == 'clean':
-        manager.cleanup_session(args.session_name, args.force)
+        manager.cleanup_context(args.context_name, args.force)
         
     elif args.command == 'export':
-        manager.export_session_config(args.session_name, args.output_file)
+        manager.export_session_config(args.context_name, args.output_file)
         
     elif args.command == 'import':
         manager.import_session_config(args.config_file)

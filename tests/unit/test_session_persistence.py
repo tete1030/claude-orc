@@ -13,49 +13,50 @@ import shutil
 from typing import Dict, List, Optional
 from unittest.mock import patch, MagicMock
 
-# Import actual SessionManager implementation
+# Import actual TeamContextManager implementation
 import sys
-sys.path.append('/home/texotqi/Documents/claude-orc/.temp')
-from session_manager import SessionManager, AgentInfo, TeamSession
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.team_context_manager import TeamContextManager, AgentInfo, TeamContext
 
 # Mock imports for components not yet implemented
-class MockSessionManager:
-    """Mock SessionManager for testing until real implementation is available"""
+class MockTeamContextManager:
+    """Mock TeamContextManager for testing until real implementation is available"""
     
     def __init__(self, registry_path: str = None):
-        self.registry_path = registry_path or "/tmp/test_session_registry.json"
-        self.sessions = {}
+        self.registry_path = registry_path or "/tmp/test_context_registry.json"
+        self.contexts = {}
         
-    def create_session(self, session_name: str, agents: List[str]) -> Dict:
-        """Create a new session with specified agents"""
-        session_data = {
-            "name": session_name,
+    def create_context(self, context_name: str, agents: List[str]) -> Dict:
+        """Create a new context with specified agents"""
+        context_data = {
+            "name": context_name,
             "created": time.time(),
             "status": "active",
-            "agents": {agent: {"container_name": f"{session_name}-{agent}"} for agent in agents}
+            "agents": {agent: {"container_name": f"{context_name}-{agent}"} for agent in agents}
         }
-        self.sessions[session_name] = session_data
+        self.contexts[context_name] = context_data
         self._save_registry()
-        return session_data
+        return context_data
     
-    def resume_session(self, session_name: str) -> Dict:
+    def resume_context(self, context_name: str) -> Dict:
         """Resume an existing session"""
-        if session_name not in self.sessions:
-            raise ValueError(f"Session {session_name} not found")
+        if context_name not in self.contexts:
+            raise ValueError(f"Context {context_name} not found")
         
-        session = self.sessions[session_name]
-        session["status"] = "resumed"
+        context = self.contexts[context_name]
+        context["status"] = "resumed"
         self._save_registry()
-        return session
+        return context
     
-    def list_sessions(self) -> Dict[str, Dict]:
-        """List all sessions"""
-        return self.sessions.copy()
+    def list_contexts(self) -> Dict[str, Dict]:
+        """List all contexts"""
+        return self.contexts.copy()
     
-    def cleanup_session(self, session_name: str) -> bool:
-        """Clean up session resources"""
-        if session_name in self.sessions:
-            del self.sessions[session_name]
+    def cleanup_context(self, context_name: str) -> bool:
+        """Clean up context resources"""
+        if context_name in self.contexts:
+            del self.contexts[context_name]
             self._save_registry()
             return True
         return False
@@ -63,13 +64,13 @@ class MockSessionManager:
     def _save_registry(self):
         """Save registry to disk"""
         with open(self.registry_path, 'w') as f:
-            json.dump(self.sessions, f, indent=2)
+            json.dump(self.contexts, f, indent=2)
     
     def _load_registry(self):
         """Load registry from disk"""
         if os.path.exists(self.registry_path):
             with open(self.registry_path, 'r') as f:
-                self.sessions = json.load(f)
+                self.contexts = json.load(f)
 
 
 class TestSessionPersistence(unittest.TestCase):
@@ -79,11 +80,11 @@ class TestSessionPersistence(unittest.TestCase):
         """Set up test environment"""
         self.temp_dir = tempfile.mkdtemp(prefix="test_session_")
         self.registry_path = os.path.join(self.temp_dir, "test_registry.json")
-        # Use real SessionManager implementation
-        self.session_manager = SessionManager(self.registry_path)
+        # Use real TeamContextManager implementation
+        self.team_context_manager = TeamContextManager(self.registry_path)
         
-        # Test session names
-        self.test_session_name = "test-session-001"
+        # Test context names
+        self.test_context_name = "test-session-001"
         self.test_agents = ["leader", "researcher", "writer"]
         
     def tearDown(self):
@@ -111,120 +112,122 @@ class TestSessionPersistence(unittest.TestCase):
             print(f"Warning: Could not clean up test containers: {e}")
     
     def test_basic_session_creation(self):
-        """Test basic session creation"""
-        # Create AgentInfo objects for real SessionManager
+        """Test basic context creation"""
+        # Create AgentInfo objects for real TeamContextManager
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_session_name}-{agent}")
+            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
         
-        tmux_session = f"{self.test_session_name}-tmux"
-        session = self.session_manager.create_session(
-            self.test_session_name, 
+        tmux_session = f"{self.test_context_name}-tmux"
+        context = self.team_context_manager.create_context(
+            self.test_context_name, 
             agents, 
             tmux_session
         )
         
-        self.assertEqual(session.session_name, self.test_session_name)
-        self.assertEqual(session.tmux_session, tmux_session)
-        self.assertEqual(len(session.agents), len(self.test_agents))
+        self.assertEqual(context.context_name, self.test_context_name)
+        self.assertEqual(context.tmux_session, tmux_session)
+        self.assertEqual(len(context.agents), len(self.test_agents))
         
         # Verify registry file was created
         self.assertTrue(os.path.exists(self.registry_path))
         
         # Verify agents have expected container names
         for i, expected_agent_name in enumerate(self.test_agents):
-            agent = session.agents[i]
-            expected_container = f"{self.test_session_name}-{expected_agent_name}"
+            agent = context.agents[i]
+            expected_container = f"{self.test_context_name}-{expected_agent_name}"
             self.assertEqual(agent.container, expected_container)
     
     def test_session_resume(self):
         """Test resuming an existing session"""
         # Create initial session
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_session_name}-{agent}")
+            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
-        self.session_manager.create_session(self.test_session_name, agents, f"{self.test_session_name}-tmux")
+        self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")
         
         # Create new manager instance (simulates restart)
-        new_manager = SessionManager(self.registry_path)
+        new_manager = TeamContextManager(self.registry_path)
         
-        # Resume session
-        resumed_session = new_manager.resume_session(self.test_session_name)
+        # Mock the container existence check to return True
+        with patch.object(new_manager, '_check_container_exists', return_value=True):
+            # Resume session
+            resumed_context = new_manager.resume_context(self.test_context_name)
         
-        self.assertEqual(resumed_session.session_name, self.test_session_name)
-        self.assertEqual(len(resumed_session.agents), len(self.test_agents))
+        self.assertEqual(resumed_context.context_name, self.test_context_name)
+        self.assertEqual(len(resumed_context.agents), len(self.test_agents))
     
     def test_resume_nonexistent_session(self):
-        """Test resuming a session that doesn't exist"""
+        """Test resuming a context that doesn't exist"""
         with self.assertRaises(ValueError) as context:
-            self.session_manager.resume_session("nonexistent-session")
+            self.team_context_manager.resume_context("nonexistent-session")
         
         self.assertIn("not found", str(context.exception))
     
-    def test_list_sessions(self):
-        """Test listing all sessions"""
+    def test_list_contexts(self):
+        """Test listing all contexts"""
         # Initially empty
-        sessions = self.session_manager.list_sessions()
-        self.assertEqual(len(sessions), 0)
+        contexts = self.team_context_manager.list_contexts()
+        self.assertEqual(len(contexts), 0)
         
-        # Create multiple sessions
+        # Create multiple contexts
         agents1 = [AgentInfo(name="agent1", container="session-1-agent1")]
         agents2 = [
             AgentInfo(name="agent2", container="session-2-agent2"),
             AgentInfo(name="agent3", container="session-2-agent3")
         ]
-        session1 = self.session_manager.create_session("session-1", agents1, "session-1-tmux")
-        session2 = self.session_manager.create_session("session-2", agents2, "session-2-tmux")
+        session1 = self.team_context_manager.create_context("session-1", agents1, "session-1-tmux")
+        session2 = self.team_context_manager.create_context("session-2", agents2, "session-2-tmux")
         
-        sessions = self.session_manager.list_sessions()
-        self.assertEqual(len(sessions), 2)
-        self.assertIn("session-1", sessions)
-        self.assertIn("session-2", sessions)
+        contexts = self.team_context_manager.list_contexts()
+        self.assertEqual(len(contexts), 2)
+        self.assertIn("session-1", contexts)
+        self.assertIn("session-2", contexts)
     
     def test_session_cleanup(self):
-        """Test cleaning up session resources"""
+        """Test cleaning up context resources"""
         # Create session
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_session_name}-{agent}")
+            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
-        self.session_manager.create_session(self.test_session_name, agents, f"{self.test_session_name}-tmux")
+        self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")
         
         # Verify it exists
-        sessions = self.session_manager.list_sessions()
-        self.assertIn(self.test_session_name, sessions)
+        contexts = self.team_context_manager.list_contexts()
+        self.assertIn(self.test_context_name, contexts)
         
         # Clean up
-        result = self.session_manager.cleanup_session(self.test_session_name)
+        result = self.team_context_manager.cleanup_context(self.test_context_name)
         self.assertTrue(result)
         
         # Verify it's gone
-        sessions = self.session_manager.list_sessions()
-        self.assertNotIn(self.test_session_name, sessions)
+        contexts = self.team_context_manager.list_contexts()
+        self.assertNotIn(self.test_context_name, contexts)
     
     def test_cleanup_nonexistent_session(self):
         """Test cleanup of nonexistent session"""
-        result = self.session_manager.cleanup_session("nonexistent")
+        result = self.team_context_manager.cleanup_context("nonexistent")
         self.assertFalse(result)
     
     def test_registry_persistence(self):
         """Test that registry persists across manager instances"""
-        # Create session with first manager
+        # Create context with first manager
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_session_name}-{agent}")
+            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
-        session1 = self.session_manager.create_session(self.test_session_name, agents, f"{self.test_session_name}-tmux")
+        session1 = self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")
         
         # Create new manager instance
-        manager2 = SessionManager(self.registry_path)
+        manager2 = TeamContextManager(self.registry_path)
         
-        # Verify session is available
-        sessions = manager2.list_sessions()
-        self.assertIn(self.test_session_name, sessions)
-        self.assertEqual(sessions[self.test_session_name]["session_name"], self.test_session_name)
+        # Verify context is available
+        contexts = manager2.list_contexts()
+        self.assertIn(self.test_context_name, contexts)
+        self.assertEqual(contexts[self.test_context_name]["context_name"], self.test_context_name)
     
     def test_corrupted_registry_handling(self):
         """Test handling of corrupted registry file"""
@@ -233,12 +236,12 @@ class TestSessionPersistence(unittest.TestCase):
             f.write("invalid json content")
         
         # Should handle gracefully
-        manager = MockSessionManager(self.registry_path)
+        manager = MockTeamContextManager(self.registry_path)
         try:
             manager._load_registry()
             # If no exception, should start with empty registry
-            sessions = manager.list_sessions()
-            self.assertEqual(len(sessions), 0)
+            contexts = manager.list_contexts()
+            self.assertEqual(len(contexts), 0)
         except Exception:
             # Or raise a clear error that can be handled
             pass
@@ -346,7 +349,7 @@ class TestSessionIntegration(unittest.TestCase):
         """Set up integration test environment"""
         self.temp_dir = tempfile.mkdtemp(prefix="test_integration_")
         self.registry_path = os.path.join(self.temp_dir, "integration_registry.json")
-        self.session_manager = MockSessionManager(self.registry_path)
+        self.team_context_manager = MockTeamContextManager(self.registry_path)
         
     def tearDown(self):
         """Clean up integration test environment"""
@@ -371,36 +374,36 @@ class TestSessionIntegration(unittest.TestCase):
     
     def test_session_with_container_simulation(self):
         """Test session management with simulated container operations"""
-        session_name = "integration-test-session"
+        context_name = "integration-test-session"
         agents = ["leader", "worker"]
         
         # Create session
-        session = self.session_manager.create_session(session_name, agents)
+        context = self.team_context_manager.create_context(context_name, agents)
         
-        # Verify session structure
-        self.assertEqual(len(session["agents"]), 2)
+        # Verify context structure
+        self.assertEqual(len(context["agents"]), 2)
         
         # Simulate container operations
         for agent in agents:
-            container_name = session["agents"][agent]["container_name"]
+            container_name = context["agents"][agent]["container_name"]
             
             # In real implementation, this would create actual containers
             # For now, we just verify the naming convention
-            expected_name = f"{session_name}-{agent}"
+            expected_name = f"{context_name}-{agent}"
             self.assertEqual(container_name, expected_name)
         
         # Resume session
-        resumed = self.session_manager.resume_session(session_name)
+        resumed = self.team_context_manager.resume_context(context_name)
         self.assertEqual(resumed["status"], "resumed")
     
-    def test_multiple_sessions_isolation(self):
-        """Test that multiple sessions are properly isolated"""
+    def test_multiple_contexts_isolation(self):
+        """Test that multiple contexts are properly isolated"""
         session1_name = "integration-test-session-1"
         session2_name = "integration-test-session-2"
         
-        # Create two sessions with same agent names
-        session1 = self.session_manager.create_session(session1_name, ["leader"])
-        session2 = self.session_manager.create_session(session2_name, ["leader"])
+        # Create two contexts with same agent names
+        session1 = self.team_context_manager.create_context(session1_name, ["leader"])
+        session2 = self.team_context_manager.create_context(session2_name, ["leader"])
         
         # Verify containers have different names
         container1 = session1["agents"]["leader"]["container_name"]
@@ -465,14 +468,14 @@ def create_helper_functions():
 
 if __name__ == '__main__':
     # Print helper information
-    print("Session Persistence Integration Tests")
+    print("Context Persistence Integration Tests")
     print("=====================================")
     print()
     print("This test suite validates session persistence functionality using persistent Docker containers.")
     print()
     print("Prerequisites:")
     print("- Docker daemon running")
-    print("- SessionManager implementation (currently using mock)")
+    print("- TeamContextManager implementation (currently using mock)")
     print("- Appropriate permissions for Docker operations")
     print()
     

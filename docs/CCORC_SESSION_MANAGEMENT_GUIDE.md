@@ -1,20 +1,20 @@
-# CCORC Session Management Guide
+# CCORC Team Context Management Guide
 
 ## Overview
 
-The Claude Multi-Agent Orchestrator supports persistent **team sessions** that survive container restarts and system reboots. This feature allows you to:
+The Claude Multi-Agent Orchestrator supports persistent **team contexts** that survive container restarts and system reboots. This feature allows you to:
 
-- Create long-running team sessions with preserved Claude Code state
+- Create long-running team contexts with preserved Claude Code state
 - Resume work exactly where you left off after interruptions
-- Manage multiple concurrent team sessions
-- Clean up resources when sessions are no longer needed
+- Manage multiple concurrent team contexts
+- Clean up resources when contexts are no longer needed
 
-**Key Concept**: Session persistence is achieved through persistent Docker containers that maintain their internal Claude Code state (stored in `~/.claude` within each container).
+**Key Concept**: Team context persistence is achieved through persistent Docker containers that maintain their internal Claude Code state (stored in `~/.claude` within each container).
 
-## Team Sessions vs Individual Containers
+## Team Contexts vs Individual Containers
 
-### Team Sessions
-- **Managed by**: `ccorc` and orchestrator `--session-name/--resume` flags
+### Team Contexts
+- **Managed by**: `ccorc` and orchestrator `--context-name/--resume` flags
 - **Scope**: Complete team setups (leader, researcher, writer agents)
 - **Purpose**: Orchestrated multi-agent work sessions
 - **Lifecycle**: Created/resumed as coordinated units
@@ -27,9 +27,9 @@ The Claude Multi-Agent Orchestrator supports persistent **team sessions** that s
 
 **Example Distinction**:
 ```bash
-# Team session management (coordinates multiple agents)
-ccorc list                    # Shows team sessions only
-python examples/team_mcp_demo_enhanced.py --session-name project-alpha
+# Team context management (coordinates multiple agents)
+ccorc list                    # Shows team contexts only
+python examples/team_mcp_demo_enhanced.py --context-name project-alpha
 
 # Individual container management (single agents)
 ccdk list                          # Shows all containers
@@ -38,10 +38,10 @@ ccdk start -i my-dev-container     # Single container
 
 ## Quick Start
 
-### Creating a New Team Session
+### Creating a New Team Context
 ```bash
-# Create a new team session
-python examples/team_mcp_demo_enhanced.py --session-name my-project
+# Create a new team context
+python examples/team_mcp_demo_enhanced.py --context-name my-project
 
 # This creates:
 # - Tmux session: my-project
@@ -49,9 +49,9 @@ python examples/team_mcp_demo_enhanced.py --session-name my-project
 # - Session registry entry tracking all components
 ```
 
-### Resuming an Existing Team Session
+### Resuming an Existing Team Context
 ```bash
-# Resume a previous team session
+# Resume a previous team context
 python examples/team_mcp_demo_enhanced.py --resume my-project
 
 # This:
@@ -60,9 +60,9 @@ python examples/team_mcp_demo_enhanced.py --resume my-project
 # - Restores all agent states and message history
 ```
 
-### Listing Available Team Sessions
+### Listing Available Team Contexts
 ```bash
-# Show all registered team sessions
+# Show all registered team contexts
 ccorc list
 
 # Show detailed information
@@ -75,44 +75,44 @@ ccorc list --verbose
 # - Total and running container counts
 ```
 
-**Note**: `ccorc list` shows only orchestrated team sessions. To see all containers (including individual ones), use `ccdk list`.
+**Note**: `ccorc list` shows only orchestrated team contexts. To see all containers (including individual ones), use `ccdk list`.
 
 ## Container Lifecycle and Persistence
 
-### How Team Session Persistence Works
+### How Team Context Persistence Works
 
 1. **Team Container Creation**: Each agent gets a persistent container with its own `~/.claude` directory
 2. **State Storage**: Claude Code stores session data, conversation history, and settings in `~/.claude`
 3. **Container Persistence**: Team containers are stopped (not removed) when sessions end
 4. **State Restoration**: Restarting team containers restores all Claude Code state automatically
 
-### Container States in Team Sessions
+### Container States in Team Contexts
 
 - **Running**: Container is active, agent is available for orchestrated work
 - **Stopped**: Container exists but is not running (team state preserved)
-- **Missing**: Container was manually removed (team session broken)
+- **Missing**: Container was manually removed (team context broken)
 
-### Example Team Session Workflow
+### Example Team Context Workflow
 ```bash
-# Day 1: Start team session
-python examples/team_mcp_demo_enhanced.py --session-name data-analysis
+# Day 1: Start team context
+python examples/team_mcp_demo_enhanced.py --context-name data-analysis
 # ... work with coordinated agents, team containers created and running
 
 # End of day: Stop session (team containers persist)
 # Team containers are stopped but not removed
 
-# Day 2: Resume team session  
+# Day 2: Resume team context  
 python examples/team_mcp_demo_enhanced.py --resume data-analysis
 # Team containers restart, all previous team context restored
 ```
 
 ## Troubleshooting Common Issues
 
-### Team Session Won't Resume
+### Team Context Won't Resume
 **Problem**: `--resume` fails with "session not found"
 **Solution**: 
 ```bash
-# Check if team session exists
+# Check if team context exists
 ccorc list
 
 # If session exists but containers are missing:
@@ -131,7 +131,7 @@ ccdk start -i my-project-leader
 ccdk start -i my-project-researcher  
 ccdk start -i my-project-writer
 
-# Then resume team session
+# Then resume team context
 python examples/team_mcp_demo_enhanced.py --resume my-project
 ```
 
@@ -142,28 +142,28 @@ python examples/team_mcp_demo_enhanced.py --resume my-project
 # Check existing tmux sessions
 tmux ls
 
-# Attach to existing team session instead of creating new
+# Attach to existing team context instead of creating new
 tmux attach -t my-project
 
 # Or force kill existing and recreate
-python examples/team_mcp_demo_enhanced.py --session-name my-project --force
+python examples/team_mcp_demo_enhanced.py --context-name my-project --force
 ```
 
 ### Out of Disk Space
 **Problem**: Many persistent team containers consuming disk space
 **Solution**:
 ```bash
-# List all team sessions and their container counts
+# List all team contexts and their container counts
 ccorc list --verbose
 
-# Clean up old unused team sessions
+# Clean up old unused team contexts
 ccorc cleanup --interactive
 
-# Remove specific team session completely
+# Remove specific team context completely
 ccorc cleanup --remove my-old-project
 ```
 
-## Best Practices for Long-Running Team Sessions
+## Best Practices for Long-Running Team Contexts
 
 ### Session Naming
 - Use descriptive names: `customer-support-team`, `data-pipeline-debug`
@@ -171,23 +171,23 @@ ccorc cleanup --remove my-old-project
 - Avoid spaces and special characters
 
 ### Resource Management
-- **Monitor Team Sessions**: Check team session status regularly
-- **Clean Up Completed Work**: Remove team sessions when projects finish
-- **Limit Concurrent Team Sessions**: Don't run too many team sessions simultaneously
+- **Monitor Team Contexts**: Check team context status regularly
+- **Clean Up Completed Work**: Remove team contexts when projects finish
+- **Limit Concurrent Team Contexts**: Don't run too many team contexts simultaneously
 
 ### Backup Important Work
 ```bash
-# Export team session information and metadata
+# Export team context information and metadata
 ccorc export my-project --output ./backups/
 
-# Monitor team session health before major changes  
+# Monitor team context health before major changes  
 ccorc health my-project
 ```
 
 ### Development Workflow
 ```bash
-# 1. Start team session for new feature
-python examples/team_mcp_demo_enhanced.py --session-name feature-auth
+# 1. Start team context for new feature
+python examples/team_mcp_demo_enhanced.py --context-name feature-auth
 
 # 2. Work with coordinated agents throughout development
 # (team containers automatically save state)
@@ -203,39 +203,39 @@ ccorc cleanup --remove feature-auth
 ```
 
 ### Team Collaboration
-- **Session Sharing**: Share team session names for coordinated handoffs
-- **State Documentation**: Use Claude's memory features to document team session context
+- **Session Sharing**: Share team context names for coordinated handoffs
+- **State Documentation**: Use Claude's memory features to document team context context
 - **Clean Handoffs**: Document current team state before passing sessions to teammates
 
 ## Advanced Usage
 
 ### Custom Team Container Configuration
 ```bash
-# Start team session with custom container settings
+# Start team context with custom container settings
 python examples/team_mcp_demo_enhanced.py \
-  --session-name my-project \
+  --context-name my-project \
   --container-memory 4g \
   --container-cpus 2
 ```
 
-### Team Session Monitoring
+### Team Context Monitoring
 ```bash
-# Monitor team session health
+# Monitor team context health
 ccorc health my-project
 
-# List all team sessions with detailed status
+# List all team contexts with detailed status
 ccorc list --verbose
 ```
 
-### Bulk Team Session Operations
+### Bulk Team Context Operations
 ```bash
-# Clean up multiple team sessions interactively
+# Clean up multiple team contexts interactively
 ccorc cleanup --interactive
 
-# Remove team sessions by pattern
+# Remove team contexts by pattern
 ccorc cleanup --pattern "feature-*"
 
-# Remove all stopped team sessions
+# Remove all stopped team contexts
 ccorc cleanup --stopped-only
 ```
 
@@ -253,28 +253,28 @@ ccdk shell -i my-project-leader
 # Check logs for specific team agent
 ccdk logs -i my-project-researcher
 
-# Create individual containers (not part of team sessions)
+# Create individual containers (not part of team contexts)
 ccdk run -i standalone-dev
 ```
 
 ### With tmux
 Team sessions create standard tmux sessions that work with all tmux commands:
 ```bash
-# Attach to team session
+# Attach to team context
 tmux attach -t my-project
 
-# Create additional windows in team session
+# Create additional windows in team context
 tmux new-window -t my-project -n "monitoring"
 
-# Use all standard tmux features with team sessions
+# Use all standard tmux features with team contexts
 ```
 
 ### With Background Processes
 ```bash
-# Run team session in background
-claude-bg start 'python examples/team_mcp_demo_enhanced.py --session-name bg-task' session-runner
+# Run team context in background
+claude-bg start 'python examples/team_mcp_demo_enhanced.py --context-name bg-task' session-runner
 
-# Resume team session in background
+# Resume team context in background
 claude-bg start 'python examples/team_mcp_demo_enhanced.py --resume bg-task' session-resumer
 ```
 
@@ -283,22 +283,22 @@ claude-bg start 'python examples/team_mcp_demo_enhanced.py --resume bg-task' ses
 ### Complete Command Reference
 
 ```bash
-# List all team sessions (NOT individual containers)
+# List all team contexts (NOT individual containers)
 ccorc list [--verbose]
 
-# Check team session health  
+# Check team context health  
 ccorc health <session-name>
 
-# Export team session metadata
+# Export team context metadata
 ccorc export <session-name> [--output <path>]
 
-# Clean up team sessions
+# Clean up team contexts
 ccorc cleanup [options]
-  --interactive          # Interactive team session selection
-  --remove <name>        # Remove specific team session
-  --pattern <pattern>    # Remove team sessions matching pattern
-  --stopped-only         # Remove only stopped team sessions
-  --fix-broken          # Fix team sessions with missing containers
+  --interactive          # Interactive team context selection
+  --remove <name>        # Remove specific team context
+  --pattern <pattern>    # Remove team contexts matching pattern
+  --stopped-only         # Remove only stopped team contexts
+  --fix-broken          # Fix team contexts with missing containers
 ```
 
 ### Key Differences from ccdk
@@ -312,15 +312,15 @@ ccorc cleanup [options]
 
 ### Integration with Core Components
 
-- **SessionManager**: Core team session persistence and registry management
-- **Orchestrator Integration**: Automatic team session creation and management via `--session-name` and `--resume` flags
+- **TeamContextManager**: Core team context persistence and registry management
+- **Orchestrator Integration**: Automatic team context creation and management via `--context-name` and `--resume` flags
 - **Container Discovery**: Hybrid approach using both registry and live container inspection for team containers
-- **Registry Synchronization**: CLI operations update shared team session registry
+- **Registry Synchronization**: CLI operations update shared team context registry
 
 ---
 
 For more detailed information, see:
-- `src/session_manager.py` - Core team session management implementation
+- `src/team_context_manager.py` - Core team context management implementation
 - `bin/ccorc` - Command-line interface source
 - `tests/unit/test_session_persistence.py` - Test suite and examples
-- `examples/` - Example team session configurations
+- `examples/` - Example team context configurations

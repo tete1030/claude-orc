@@ -136,10 +136,10 @@ def daily_usage_report():
 ## Team Session Cost Tracking
 
 ### Session-Based Monitoring
-When using persistent team sessions, costs can be tracked per project:
+When using persistent team contexts, costs can be tracked per project:
 
 ```bash
-# Monitor specific team session costs
+# Monitor specific team context costs
 ccorc list --verbose  # See active sessions
 
 # Track costs for specific project
@@ -148,11 +148,11 @@ tail -f ~/.claude/projects/ccbox-my-project-*/session.jsonl
 
 ### Project-Level Reporting
 ```bash
-# Generate report for team session
+# Generate report for team context
 ./scripts/team-session-costs.sh my-project-session
 
 # Example output:
-# Team Session: my-project-session
+# Team Context: my-project-context
 # Leader Agent: $2.45 (3,200 tokens)
 # Researcher Agent: $1.89 (2,100 tokens)  
 # Writer Agent: $3.12 (4,500 tokens)
@@ -280,13 +280,13 @@ fi
 - **Monitor Disk Usage**: Session files can accumulate over time
 
 ### Team Cost Management
-- **Project Budgets**: Track costs per team session
+- **Project Budgets**: Track costs per team context
 - **Agent Efficiency**: Monitor which agents are most cost-effective
 - **Usage Optimization**: Identify opportunities to reduce costs
 
 ---
 
 For more information, see:
-- `docs/SESSION_MANAGEMENT_GUIDE.md` - Team session management
+- `docs/CCORC_SESSION_MANAGEMENT_GUIDE.md` - Team context management
 - `docs/CCDK_USAGE.md` - Docker container management
-- `src/session_manager.py` - Session persistence implementation
+- `src/team_context_manager.py` - Team context persistence implementation
