@@ -193,10 +193,10 @@ RUN chmod +x /usr/local/bin/ccdk
 # Copy container scripts
 COPY docker/claude-code/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/claude-code/session-monitor-daemon.sh /usr/local/bin/session-monitor-daemon.sh
-COPY docker/claude-code/run-command.sh /usr/local/bin/run-command.sh
+COPY docker/claude-code/run-command-with-env.sh /usr/local/bin/run-command-with-env.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && chmod +x /usr/local/bin/session-monitor-daemon.sh \
-    && chmod +x /usr/local/bin/run-command.sh
+    && chmod +x /usr/local/bin/run-command-with-env.sh
 
 # Expose common ports
 EXPOSE 8000 8080 3000 5000 5001

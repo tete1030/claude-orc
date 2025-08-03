@@ -19,7 +19,7 @@ The Claude Multi-Agent Orchestrator now supports cost monitoring by making Claud
 #### Isolated Mode (Default)
 - **Mount Strategy**: Container has isolated `~/.claude` directory
 - **Session Sharing**: Daemon creates symlinks to host filesystem
-- **Host Location**: `~/.claude/projects/cont-<container-name>-<project>/`
+- **Host Location**: `~/.claude/projects/ccbox-<container-name>-<project>/`
 - **Cost Monitoring**: Requires daemon for session file access
 
 ### Session File Sharing Architecture
@@ -28,7 +28,7 @@ The Claude Multi-Agent Orchestrator now supports cost monitoring by making Claud
 Host Filesystem                    Container (Isolated Mode)
 ├── ~/.claude/                     ├── ~/.claude/
 │   └── projects/                   │   └── projects/
-│       └── cont-agent1-proj/       │       └── proj/
+│       └── ccbox-agent1-proj/       │       └── proj/
 │           └── session.jsonl  ←────┤           └── session.jsonl
 │                                   │
 └── Cost Monitoring Tool            └── Session Monitor Daemon
@@ -59,7 +59,7 @@ ls ~/.claude/projects/*/
 ccdk run -i my-agent
 
 # Session files available at:
-ls ~/.claude/projects/cont-my-agent-*/
+ls ~/.claude/projects/ccbox-my-agent-*/
 ```
 
 ### Accessing Session Files
@@ -70,7 +70,7 @@ ls ~/.claude/projects/cont-my-agent-*/
 ~/.claude/projects/<project-name>/session.jsonl
 
 # Isolated mode - symlinked access
-~/.claude/projects/cont-<container-name>-<project>/session.jsonl
+~/.claude/projects/ccbox-<container-name>-<project>/session.jsonl
 ```
 
 #### Example Monitoring Script
@@ -143,7 +143,7 @@ When using persistent team sessions, costs can be tracked per project:
 ccorc list --verbose  # See active sessions
 
 # Track costs for specific project
-tail -f ~/.claude/projects/cont-my-project-*/session.jsonl
+tail -f ~/.claude/projects/ccbox-my-project-*/session.jsonl
 ```
 
 ### Project-Level Reporting
@@ -174,7 +174,7 @@ tail -f ~/.claude/projects/cont-my-project-*/session.jsonl
 ccdk exec -i my-agent ps aux | grep session_monitor
 
 # Verify symlink creation
-ls -la ~/.claude/projects/cont-*/
+ls -la ~/.claude/projects/ccbox-*/
 ```
 
 ### Security Considerations
@@ -217,7 +217,7 @@ ccdk shell -i my-agent cat /var/log/session_monitor.log
 ```bash
 # Compare container vs host session files
 ccdk exec -i my-agent ls ~/.claude/projects/*/
-ls ~/.claude/projects/cont-my-agent-*/
+ls ~/.claude/projects/ccbox-my-agent-*/
 
 # Check for stale symlinks
 find ~/.claude/projects/ -type l -exec test ! -e {} \; -print

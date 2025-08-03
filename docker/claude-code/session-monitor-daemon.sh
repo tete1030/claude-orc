@@ -76,10 +76,13 @@ fi
 process_directory() {
     local dir="$1"
     local dir_name=$(basename "$dir")
-    local host_dir="$HOST_PROJECTS/cont-${CONTAINER_NAME}-${dir_name}"
-    
-    log "Processing directory: $dir_name"
-    
+    local host_dir="$HOST_PROJECTS/ccbox-${CONTAINER_NAME}-${dir_name}"
+
+    if [ -e "$host_dir" ] && { [ ! -d "$host_dir" ] || [ -L "$host_dir" ]; }; then
+        log "ERROR: $host_dir not a directory"
+        return
+    fi
+
     # Create host directory
     mkdir -p "$host_dir"
     
@@ -95,14 +98,45 @@ process_directory() {
     log "Created symlink: $dir -> $host_dir"
 }
 
+process_host_directory() {
+    local hostdir="$1"
+    local hostdir_name=$(basename "$hostdir")
+    local dir_name="${hostdir_name#ccbox-"${CONTAINER_NAME}"-}"
+    local dir="$CLAUDE_PROJECTS/$dir_name"
+
+    if [ -L "$dir" ]; then
+        # Symlink already created by previous step
+        return
+    fi
+
+    if [ -d "$dir" ]; then
+        log "ERROR: $dir should not be a directory"
+        return
+    fi
+
+    if [ -e "$dir" ]; then
+        log "ERROR: $dir already exists in container"
+        return
+    fi
+
+    ln -s "$hostdir" "$dir"
+    log "Created symlink: $dir -> $hostdir"
+}
+
 # Initial scan
-if [ -d "$CLAUDE_PROJECTS" ]; then
-    for dir in "$CLAUDE_PROJECTS"/*; do
-        if [ -d "$dir" ] && [ ! -L "$dir" ]; then
-            process_directory "$dir"
-        fi
-    done
-fi
+for dir in "$CLAUDE_PROJECTS"/*; do
+    if [ -d "$dir" ] && [ ! -L "$dir" ]; then
+        log "Processing container project: $dir"
+        process_directory "$dir"
+    fi
+done
+
+for hostdir in "$HOST_PROJECTS"/ccbox-${CONTAINER_NAME}-*; do
+    if [ -d "$hostdir" ] && [ ! -L "$hostdir" ]; then
+        log "Processing host project of this container: $hostdir"
+        process_host_directory "$hostdir"
+    fi
+done
 
 # Monitor for new directories using inotify
 log "Starting inotifywait monitoring"

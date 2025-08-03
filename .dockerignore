@@ -9,4 +9,4 @@
 !docker/claude-code/
 !docker/claude-code/entrypoint.sh
 !docker/claude-code/session-monitor-daemon.sh
-!docker/claude-code/run-command.sh
+!docker/claude-code/run-command-with-env.sh

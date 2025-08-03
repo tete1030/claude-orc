@@ -136,88 +136,102 @@ CLAUDE_CONTAINER_MODE=${CLAUDE_CONTAINER_MODE:-shared}
 
 # Check if .claude-host is actually mounted
 CLAUDE_HOST_MOUNTED=false
-if mountpoint -q "$USER_HOME/.claude-host" 2>/dev/null; then
+if mountpoint -q "$USER_HOME/.claude-host/.claude" 2>/dev/null; then
+    if [ ! -d "$USER_HOME/.claude-host/.claude" ]; then
+        echo ".claude-host/.claude is mounted but is not a directory"
+        exit 1
+    fi
+
     CLAUDE_HOST_MOUNTED=true
+    if ( ! mountpoint -q "$USER_HOME/.claude-host/.claude.json" 2>/dev/null ) || [ ! -f "$USER_HOME/.claude-host/.claude.json" ]; then
+        echo "Claude host directory is mounted from host system but .claude.json is not mounted"
+        exit 1
+    fi
+elif [ -e "$USER_HOME/.claude-host/.claude" ]; then
+    echo ".claude-host/.claude exists but is not a mountpoint"
+    exit 1
+fi
+
+if [ "$CLAUDE_CONTAINER_MODE" = "shared" ] && [ "$CLAUDE_HOST_MOUNTED" = "false" ]; then
+    echo "Claude host directory is not mounted from host system, but shared mode is requested"
+    exit 1
 fi
 
 if [ "$CLAUDE_HOST_MOUNTED" = "true" ]; then
+    # SAFETY CHECK: Ensure .claude is not already a symlink/mount from shared mode
+    if [ -L "$USER_HOME/.claude" ] || mountpoint -q "$USER_HOME/.claude" 2>/dev/null; then
+        echo "ERROR: .claude is a symlink or mountpoint in isolated mode - this is unsafe!"
+        echo "Please remove the symlink/mount before running in isolated mode"
+        exit 1
+    fi
+
     echo "Claude host directory is mounted from host system"
     if [ "$CLAUDE_CONTAINER_MODE" = "shared" ]; then
         # Shared mode: Just symlink everything without modification
-        if [ -d "$USER_HOME/.claude-host/.claude" ]; then
-            ln -sf "$USER_HOME/.claude-host/.claude" "$USER_HOME/.claude"
-            chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
-        fi
+        ln -sf "$USER_HOME/.claude-host/.claude" "$USER_HOME/.claude"
+        chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
         
-        if [ -f "$USER_HOME/.claude-host/.claude.json" ]; then
-            ln -sf "$USER_HOME/.claude-host/.claude.json" "$USER_HOME/.claude.json"
-            chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude.json"
-        fi
+        ln -sf "$USER_HOME/.claude-host/.claude.json" "$USER_HOME/.claude.json"
+        chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude.json"
+
     else
         # Isolated mode: Copy and filter configuration
-        
-        # SAFETY CHECK: Ensure .claude is not already a symlink/mount from shared mode
-        if [ -L "$USER_HOME/.claude" ] || mountpoint -q "$USER_HOME/.claude" 2>/dev/null; then
-            echo "ERROR: .claude is a symlink or mountpoint in isolated mode - this is unsafe!"
-            echo "Please remove the symlink/mount before running in isolated mode"
-            exit 1
-        fi
         
         # Create .claude directory if it doesn't exist
         mkdir -p "$USER_HOME/.claude"
         chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
         
-        # Copy and process claude.json if it exists
-        if [ -f "$USER_HOME/.claude-host/.claude.json" ]; then
-            # First copy the file
-            cp "$USER_HOME/.claude-host/.claude.json" "$USER_HOME/.claude.json"
+        # First copy the file
+        cp "$USER_HOME/.claude-host/.claude.json" "$USER_HOME/.claude.json"
             
-            # Process with jq to keep only the current workspace project
-            if command -v jq &> /dev/null && [ -n "$WORKSPACE_PATH" ]; then
-                # Create a filtered version that:
-                # 1. Keeps only the current workspace project and its sub-projects
-                # 2. Removes history from all kept projects
-                jq --arg workspace "$WORKSPACE_PATH" '
-                    # Keep workspace project and its sub-projects, remove history from all
-                    .projects |= (
-                        to_entries |
-                        map(
-                            if .key == $workspace or (.key | startswith($workspace + "/"))
-                            then .value.history = [] | .
-                            else empty
-                            end
-                        ) |
-                        from_entries
-                    )
-                ' "$USER_HOME/.claude.json" > "$USER_HOME/.claude.json.tmp" && \
-                mv "$USER_HOME/.claude.json.tmp" "$USER_HOME/.claude.json"
-            fi
-            
-            chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude.json"
+        # Create a filtered version that:
+        # 1. Keeps only the current workspace project and its sub-projects
+        # 2. Removes history from all kept projects
+        jq --arg workspace "$WORKSPACE_PATH" '
+            # Keep workspace project and its sub-projects, remove history from all
+            .projects |= (
+                to_entries |
+                map(
+                    if .key == $workspace or (.key | startswith($workspace + "/"))
+                    then .value.history = [] | .
+                    else empty
+                    end
+                ) |
+                from_entries
+            )
+        ' "$USER_HOME/.claude.json" > "$USER_HOME/.claude.json.tmp" && \
+        mv "$USER_HOME/.claude.json.tmp" "$USER_HOME/.claude.json"
+        
+        chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude.json"
+        
+        # Symlink credentials.json if it exists (shared across all containers)
+        if [ -f "$USER_HOME/.claude-host/.claude/.credentials.json" ]; then
+            ln -sf "$USER_HOME/.claude-host/.claude/.credentials.json" "$USER_HOME/.claude/.credentials.json"
+            chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/.credentials.json"
         fi
         
-        # Copy or symlink configuration files from .claude-host/.claude to .claude
-        if [ -d "$USER_HOME/.claude-host/.claude" ]; then
-            # Symlink credentials.json if it exists (shared across all containers)
-            if [ -f "$USER_HOME/.claude-host/.claude/.credentials.json" ]; then
-                ln -sf "$USER_HOME/.claude-host/.claude/.credentials.json" "$USER_HOME/.claude/.credentials.json"
-                chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/.credentials.json"
-            fi
-            
-            # Copy settings.json if it exists (isolated per container)
-            if [ -f "$USER_HOME/.claude-host/.claude/settings.json" ]; then
-                cp "$USER_HOME/.claude-host/.claude/settings.json" "$USER_HOME/.claude/settings.json"
-                chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/settings.json"
-            fi
-            
-            # Create symlinks for specific directories
-            for dir in ide local statsig; do
-                if [ -d "$USER_HOME/.claude-host/.claude/$dir" ]; then
-                    ln -sf "$USER_HOME/.claude-host/.claude/$dir" "$USER_HOME/.claude/$dir"
-                    chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/$dir"
-                fi
-            done
+        # Copy settings.json if it exists (isolated per container)
+        if [ -f "$USER_HOME/.claude-host/.claude/settings.json" ]; then
+            cp "$USER_HOME/.claude-host/.claude/settings.json" "$USER_HOME/.claude/settings.json"
+            chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/settings.json"
         fi
+        
+        # Create symlinks for specific directories
+        for dir in ide local statsig; do
+            if [ -d "$USER_HOME/.claude-host/.claude/$dir" ]; then
+                ln -sf "$USER_HOME/.claude-host/.claude/$dir" "$USER_HOME/.claude/$dir"
+                chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude/$dir"
+            fi
+        done
+
+        # Start session monitor daemon (isolated mode only and when host is mounted)
+        echo "Starting session monitor daemon for isolated mode..."
+        # Start the daemon in background as the user
+        su -c "nohup /usr/local/bin/session-monitor-daemon.sh '$USER_NAME' '$USER_HOME' > /tmp/session_monitor_startup.log 2>&1 &" "$USER_NAME"
+        
+        # Ensure the host projects directory exists
+        mkdir -p "$USER_HOME/.claude-host/.claude/projects"
+        chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude-host/.claude/projects"
     fi
 else
     echo "Warning: Claude host directory not mounted - running without host configuration"
@@ -226,21 +240,9 @@ else
     chown -R "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
 fi
 
-# Start session monitor daemon (isolated mode only and when host is mounted)
-if [ "$CLAUDE_CONTAINER_MODE" = "isolated" ] && [ "$CLAUDE_HOST_MOUNTED" = "true" ]; then
-    echo "Starting session monitor daemon for isolated mode..."
-    # Start the daemon in background as the user
-    su -c "nohup /usr/local/bin/session-monitor-daemon.sh '$USER_NAME' '$USER_HOME' > /tmp/session_monitor_startup.log 2>&1 &" "$USER_NAME"
-    
-    # Ensure the host projects directory exists
-    mkdir -p "$USER_HOME/.claude-host/.claude/projects"
-elif [ "$CLAUDE_CONTAINER_MODE" = "isolated" ] && [ "$CLAUDE_HOST_MOUNTED" = "false" ]; then
-    echo "Warning: Isolated mode requested but host directory not mounted - session monitoring disabled"
-fi
-
-# Ensure run-command.sh can access workspace path
+# Ensure run-command-with-env.sh can access workspace path
 export WORKSPACE_PATH
 
 # Execute the command as the user with the wrapper
 # Use username instead of UID:GID so gosu picks up all supplementary groups
-exec gosu $USER_NAME /usr/local/bin/run-command.sh "$@"
+exec gosu $USER_NAME /usr/local/bin/run-command-with-env.sh "$@"

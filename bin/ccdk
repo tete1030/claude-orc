@@ -14,6 +14,7 @@ DEFAULT_CONTAINER_NAME="ccbox"
 
 # Parse command line options
 INSTANCE_NAME="${CLAUDE_INSTANCE:-}"
+RANDOM_INSTANCE_SUFFIX=""
 MODEL_NAME="${ANTHROPIC_MODEL:-}"
 CONTAINER_MODE="${CLAUDE_CONTAINER_MODE:-}"
 PARSED_ARGS=()
@@ -39,18 +40,14 @@ parse_options() {
                 shift
                 ;;
             --random)
+                local random_instance_suffix=""
                 # Generate 8-character random string (alphanumeric)
-                RANDOM_SUFFIX=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 8 || true)
-                if [ -z "$RANDOM_SUFFIX" ]; then
+                random_instance_suffix=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 8 || true)
+                if [ -z "$random_instance_suffix" ]; then
                     # Fallback to date-based suffix if urandom fails
-                    RANDOM_SUFFIX=$(date +%s | tail -c 8)
+                    random_instance_suffix=$(date +%s | tail -c 8)
                 fi
-                
-                if [ -n "$INSTANCE_NAME" ]; then
-                    INSTANCE_NAME="${INSTANCE_NAME}-${RANDOM_SUFFIX}"
-                else
-                    INSTANCE_NAME="${RANDOM_SUFFIX}"
-                fi
+                RANDOM_INSTANCE_SUFFIX="-$random_instance_suffix"
                 shift
                 ;;
             *)
@@ -65,7 +62,7 @@ parse_options() {
 parse_options "$@"
 
 # Export parsed values
-[ -n "$INSTANCE_NAME" ] && export CLAUDE_INSTANCE="$INSTANCE_NAME"
+{ [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ] ; } && export CLAUDE_INSTANCE="${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
 [ -n "$MODEL_NAME" ] && export ANTHROPIC_MODEL="$MODEL_NAME"
 [ -n "$CONTAINER_MODE" ] && export CLAUDE_CONTAINER_MODE="$CONTAINER_MODE"
 
@@ -219,6 +216,7 @@ build_docker_env_args() {
     
     # Claude configuration mode
     [[ -n "$CLAUDE_CONTAINER_MODE" ]] && env_args="$env_args -e CLAUDE_CONTAINER_MODE"
+    [[ -n "$CLAUDE_INSTANCE" ]] && env_args="$env_args -e CLAUDE_INSTANCE"
     
     echo "$env_args"
 }
@@ -264,10 +262,17 @@ build_volume_args() {
         touch "$HOME/.claude.json"
         echo "Created $HOME/.claude.json file"
     fi
+
+    # Ensure .claude-orc directory exists with proper ownership before Docker creates it
+    if [ ! -d "$HOME/.claude-orc" ]; then
+        mkdir -p "$HOME/.claude-orc"
+        echo "Created $HOME/.claude-orc directory with user ownership"
+    fi
     
     volume_args="$volume_args -v $workspace_path:$workspace_path"
     volume_args="$volume_args -v $HOME/.claude:$HOME/.claude-host/.claude"
     volume_args="$volume_args -v $HOME/.claude.json:$HOME/.claude-host/.claude.json"
+    volume_args="$volume_args -v $HOME/.claude-orc:$HOME/.claude-orc"
     
     # Only mount files/directories that exist
     [ -f "$HOME/.gitconfig" ] && volume_args="$volume_args -v $HOME/.gitconfig:$HOME/.gitconfig:ro"
@@ -408,10 +413,10 @@ exec_shell() {
             -e COLORTERM="$COLORTERM" \
             -e LANGUAGE="$LANGUAGE" \
             -e TZ="$TZ" \
-            "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh /bin/bash
+            "$CONTAINER_NAME" gosu $USER /usr/local/bin/run-command-with-env.sh /bin/bash
     else
         # Execute the provided command
-        print_status "Executing command in container: ${args[@]}"
+        print_status "Executing command in container: ${args[*]}"
         docker exec -it \
             -e LOCAL_USER_ID=$(id -u) \
             -e LOCAL_GROUP_ID=$(id -g) \
@@ -424,7 +429,7 @@ exec_shell() {
             -e COLORTERM="$COLORTERM" \
             -e LANGUAGE="$LANGUAGE" \
             -e TZ="$TZ" \
-            "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh "${args[@]}"
+            "$CONTAINER_NAME" gosu $USER /usr/local/bin/run-command-with-env.sh "${args[@]}"
     fi
 }
 
@@ -535,7 +540,7 @@ claude_code() {
         -e TERM="$TERM" \
         -e COLORTERM="$COLORTERM" \
         -e LANGUAGE="$LANGUAGE" \
-        "$CONTAINER_NAME" gosu $USER /tmp/run_command.sh claude --dangerously-skip-permissions "${args[@]}"
+        "$CONTAINER_NAME" gosu $USER /usr/local/bin/run-command-with-env.sh claude --dangerously-skip-permissions "${args[@]}"
 }
 
 # Show logs

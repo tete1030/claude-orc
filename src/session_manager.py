@@ -48,7 +48,7 @@ class SessionManager:
         
         Args:
             registry_path: Path to session registry JSON file.
-                          Defaults to ~/.claude-orchestrator/sessions.json
+                          Defaults to ~/.claude-orc/sessions.json
         """
         self.logger = logging.getLogger(__name__)
         
@@ -56,7 +56,7 @@ class SessionManager:
         if registry_path:
             self.registry_path = Path(registry_path)
         else:
-            self.registry_path = Path.home() / ".claude-orchestrator" / "sessions.json"
+            self.registry_path = Path.home() / ".claude-orc" / "sessions.json"
             
         # Create directory if needed
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
