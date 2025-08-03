@@ -11,13 +11,14 @@ export POETRY_HOME="/opt/poetry"
 export PATH="$POETRY_HOME/bin:$PATH"
 
 # Prioritize local Claude Code installation (auto-updating version)
-if [ -d "${HOME}/.claude/local" ]; then
+if [[ "$PATH" != *"${HOME}/.claude/local"* ]] && [ -d "${HOME}/.claude/local" ] && [ -x "${HOME}/.claude/local/claude" ] ; then
     export PATH="${HOME}/.claude/local:$PATH"
 fi
 
 # Ensure WORKSPACE_PATH is set
 if [ -z "${WORKSPACE_PATH}" ]; then
-    export WORKSPACE_PATH="/workspace"
+    echo "ERROR: WORKSPACE_PATH is not set"
+    exit 1
 fi
 
 # Configure Poetry for Docker environment
