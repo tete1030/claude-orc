@@ -130,13 +130,144 @@ CLAUDE_INSTANCE=test ccdk logs
 
 ### Custom Volume Mounts
 
-Create a `.ccbox.env` file in your workspace to define custom mounts:
+Create a `.ccbox/mounts` file in your workspace to define custom mounts:
 
 ```bash
-# .ccbox.env
+# .ccbox/mounts
 MOUNT_DATA="/mnt/data:/mnt/data:ro"
 MOUNT_CACHE="/home/user/.cache:/workspace/.cache:cached"
 MOUNT_MODELS="/path/to/models:/models:ro"
+```
+
+#### .ccbox/mounts Configuration
+
+The `.ccbox/mounts` file allows you to configure additional volume mounts for your containers. This file is automatically loaded when you start containers and supports the following format:
+
+```bash
+# Format: MOUNT_<NAME>="/host/path:/container/path:options"
+```
+
+**Mount Options**:
+- `ro` - Read-only mount (recommended for data directories)
+- `rw` - Read-write mount (default if no option specified)
+- `cached` - Better performance for code directories on macOS
+
+#### Setup Instructions
+
+1. **Create the .ccbox directory**:
+   ```bash
+   mkdir -p .ccbox
+   ```
+
+2. **Copy the example file**:
+   ```bash
+   cp .ccbox/mounts.example .ccbox/mounts
+   ```
+
+3. **Edit the mounts file**:
+   ```bash
+   # Edit .ccbox/mounts to add your custom mounts
+   nano .ccbox/mounts
+   ```
+
+4. **Example configurations**:
+   ```bash
+   # Mount data directories (read-only)
+   MOUNT_DATA="/mnt/external/data:/mnt/data:ro"
+   MOUNT_DATASETS="/home/user/datasets:/workspace/datasets:ro"
+   
+   # Mount code repositories (with caching for performance)
+   MOUNT_PROJECTS="/home/user/projects:/workspace/projects:cached"
+   MOUNT_LIBS="/home/user/libraries:/workspace/libs:ro"
+   
+   # Mount configuration files (read-only for security)
+   MOUNT_CONFIG="/home/user/.myapp:/workspace/.myapp:ro"
+   
+   # Mount shared caches (for faster builds)
+   MOUNT_NPM_CACHE="/home/user/.npm:/home/user/.npm:cached"
+   MOUNT_PIP_CACHE="/home/user/.cache/pip:/home/user/.cache/pip:cached"
+   MOUNT_CARGO_CACHE="/home/user/.cargo:/home/user/.cargo:cached"
+   
+   # Mount external drives or network shares
+   MOUNT_EXTERNAL="/media/external:/mnt/external:ro"
+   MOUNT_NFS="/mnt/nfs/share:/workspace/share:ro"
+   
+   # Mount specific tools or binaries
+   MOUNT_TOOLS="/opt/custom-tools:/opt/custom-tools:ro"
+   ```
+
+#### Important Notes
+
+- **Git Ignored**: Add `.ccbox/` to your `.gitignore` to avoid committing environment-specific configurations
+- **Security**: Never mount sensitive directories with write access unless absolutely necessary
+- **Performance**: Use `:cached` option for frequently accessed code directories on macOS
+- **Paths**: Use absolute paths for both host and container paths
+- **Conflicts**: Avoid mounting over existing system directories in the container
+- **Permissions**: The container runs as your host user, so mounted files will have correct permissions
+
+#### Common Use Cases
+
+**Development Environment**:
+```bash
+# Mount shared development tools
+MOUNT_TOOLS="/opt/dev-tools:/opt/dev-tools:ro"
+MOUNT_SCRIPTS="/home/user/scripts:/workspace/scripts:cached"
+
+# Mount shared libraries and dependencies
+MOUNT_SHARED_LIBS="/opt/shared-libs:/opt/shared-libs:ro"
+```
+
+**Data Science Projects**:
+```bash
+# Mount large datasets (read-only)
+MOUNT_DATASETS="/mnt/datasets:/data/datasets:ro"
+MOUNT_MODELS="/mnt/models:/data/models:ro"
+
+# Mount model outputs (read-write)
+MOUNT_OUTPUTS="/mnt/outputs:/data/outputs:rw"
+
+# Mount Jupyter notebooks (cached for performance)
+MOUNT_NOTEBOOKS="/home/user/notebooks:/workspace/notebooks:cached"
+```
+
+**Multi-Project Development**:
+```bash
+# Mount related projects for cross-project development
+MOUNT_PROJECT_A="/home/user/project-a:/workspace/project-a:cached"
+MOUNT_PROJECT_B="/home/user/project-b:/workspace/project-b:cached"
+MOUNT_SHARED="/home/user/shared:/workspace/shared:cached"
+```
+
+#### Troubleshooting Mounts
+
+**Mount not appearing**:
+```bash
+# Check if the .ccbox/mounts file exists and has correct format
+cat .ccbox/mounts
+
+# Verify host path exists
+ls -la /host/path/to/mount
+
+# Check container mounts
+ccdk shell mount | grep workspace
+```
+
+**Permission issues**:
+```bash
+# Check file ownership on host
+ls -la /host/path/to/mount
+
+# Check user ID in container matches host
+ccdk shell id
+```
+
+**Performance issues**:
+```bash
+# For macOS, add :cached option for better performance
+MOUNT_CODE="/home/user/code:/workspace/code:cached"
+
+# For large datasets, consider read-only mounts
+MOUNT_DATA="/mnt/data:/data:ro"
 ```
 
 ### Environment Variables
@@ -161,7 +292,7 @@ MOUNT_MODELS="/path/to/models:/models:ro"
 - Home directory (all configurations)
 - Docker socket (for Docker operations)
 - Shared orchestrator directory (`/tmp/claude-orc`)
-- Custom mounts from `.ccbox.env`
+- Custom mounts from `.ccbox/mounts`
 
 ## Troubleshooting
 
@@ -245,4 +376,4 @@ docker ps  # Should work without sudo
 
 - [Docker Environment README](../docker/claude-code/README.md) - Detailed Docker setup documentation
 - [CCBox Dockerfile](../docker/claude-code/Dockerfile) - Container configuration
-- [.ccbox.env.example](../.ccbox.env.example) - Example custom mounts configuration
+- [.ccbox/mounts.example](../.ccbox/mounts.example) - Example custom mounts configuration

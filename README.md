@@ -245,10 +245,10 @@ ccdk start
 ```
 
 ### Custom Volume Mounts
-Create a `.ccbox.env` file to add custom mounts:
+Create a `.ccbox/mounts` file to add custom mounts:
 
 ```bash
-# Example .ccbox.env
+# Example .ccbox/mounts
 MOUNT_DATA="/path/to/data:/mnt/data:ro"
 MOUNT_CACHE="/home/user/.cache:/workspace/.cache:cached"
 ```

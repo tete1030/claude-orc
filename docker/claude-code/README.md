@@ -110,18 +110,19 @@ The following directories are mounted by default:
 - `/tmp/claude-orc`: Shared orchestrator directory
 - `~/.cache/ms-playwright`: Playwright browser cache
 
-### Custom Mounts via .ccbox.env
-You can add custom volume mounts by creating a `.ccbox.env` file in your workspace:
+### Custom Mounts via .ccbox/mounts
+You can add custom volume mounts by creating a `.ccbox/mounts` file in your workspace:
 
 ```bash
-# Copy the example file
-cp .ccbox.env.example .ccbox.env
+# Create the .ccbox directory and mounts file
+mkdir -p .ccbox
+cp .ccbox/mounts.example .ccbox/mounts
 
 # Edit to add your mounts
 # Format: MOUNT_<NAME>="/host/path:/container/path:options"
 ```
 
-Example `.ccbox.env`:
+Example `.ccbox/mounts`:
 ```bash
 # Mount data directories
 MOUNT_DATA="/mnt/data:/mnt/data:ro"
@@ -134,12 +135,112 @@ MOUNT_PROJECTS="/home/user/projects:/workspace/projects:cached"
 MOUNT_NPM_CACHE="/home/user/.npm:/home/user/.npm:cached"
 ```
 
+### Workspace-Specific Environment Loading
+The container supports workspace-specific environment configuration through the `.ccbox/` directory:
+
+```bash
+.ccbox/
+├── init.sh     # Custom initialization script (optional)
+├── mounts      # Custom volume mounts (optional)
+└── .gitignore  # Exclude configurations from git
+```
+
+#### Environment Initialization (.ccbox/init.sh)
+Create `.ccbox/init.sh` to customize the container environment for your project:
+
+```bash
+#!/bin/bash
+# Example .ccbox/init.sh
+
+# Configure Poetry for Docker environment
+export POETRY_VIRTUALENVS_PATH="${WORKSPACE_PATH}/.venv-docker"
+if command -v poetry &> /dev/null; then
+    poetry config virtualenvs.path "${WORKSPACE_PATH}/.venv-docker"
+    poetry env use python3.12 2>/dev/null || true
+fi
+
+# Set project-specific environment variables
+export DATABASE_URL="sqlite:///dev.db"
+export DEBUG=true
+
+# Auto-install dependencies
+if [ -f "${WORKSPACE_PATH}/pyproject.toml" ] && ! [ -d "${WORKSPACE_PATH}/.venv-docker" ]; then
+    echo "Installing Python dependencies with Poetry..."
+    poetry install --no-root
+fi
+```
+
+The environment loading system:
+1. **Workspace Detection**: Container automatically detects your workspace directory
+2. **Environment Sourcing**: Sources `.ccbox/init.sh` if it exists in your workspace
+3. **Tool Initialization**: Configures pyenv, Poetry, and other development tools
+4. **Custom Configuration**: Applies your project-specific settings and dependencies
+
+#### Language-Specific Setup Examples
+
+**Python/Poetry Project**:
+```bash
+#!/bin/bash
+# .ccbox/init.sh
+export POETRY_VIRTUALENVS_PATH="${WORKSPACE_PATH}/.venv-docker"
+poetry config virtualenvs.path "${WORKSPACE_PATH}/.venv-docker"
+poetry env use python3.12 2>/dev/null || true
+
+# Auto-activate virtual environment
+if [ -d "${WORKSPACE_PATH}/.venv-docker" ]; then
+    DOCKER_VENV=$(find "${WORKSPACE_PATH}/.venv-docker" -maxdepth 1 -type d -name "*-py3.12" | head -1)
+    if [ -n "$DOCKER_VENV" ] && [ -d "$DOCKER_VENV" ]; then
+        export VIRTUAL_ENV="$DOCKER_VENV"
+        export PATH="$VIRTUAL_ENV/bin:$PATH"
+        source "$VIRTUAL_ENV/bin/activate" 2>/dev/null || true
+    fi
+fi
+```
+
+**Node.js Project**:
+```bash
+#!/bin/bash
+# .ccbox/init.sh
+export NODE_ENV=development
+
+# Auto-install dependencies
+if [ -f "${WORKSPACE_PATH}/package.json" ] && ! [ -d "${WORKSPACE_PATH}/node_modules" ]; then
+    echo "Installing Node.js dependencies..."
+    npm install
+fi
+```
+
+**Multi-Language Project**:
+```bash
+#!/bin/bash
+# .ccbox/init.sh
+# Support for Python, Node.js, and Go in the same project
+
+# Python setup
+if [ -f "${WORKSPACE_PATH}/pyproject.toml" ]; then
+    export POETRY_VIRTUALENVS_PATH="${WORKSPACE_PATH}/.venv-docker"
+    poetry config virtualenvs.path "${WORKSPACE_PATH}/.venv-docker"
+fi
+
+# Node.js setup
+if [ -f "${WORKSPACE_PATH}/package.json" ]; then
+    export NODE_ENV=development
+fi
+
+# Go setup
+if [ -f "${WORKSPACE_PATH}/go.mod" ]; then
+    export GOPATH="${WORKSPACE_PATH}/.go"
+    export PATH="${GOPATH}/bin:$PATH"
+fi
+```
+
 **Important**: 
 - The container dynamically adjusts to use your host user ID, group ID, and home directory structure
 - Your workspace is mounted at the exact same path inside the container as on your host
 - File permissions are preserved perfectly since the container runs as your user
 - Only necessary config files are mounted (not your entire home directory)
-- Custom mounts are loaded from `.ccbox.env` (git-ignored by default)
+- Custom mounts are loaded from `.ccbox/mounts` (git-ignored via .ccbox/.gitignore)
+- Environment initialization runs automatically when the container starts
 
 ## Environment Variables
 
@@ -280,7 +381,7 @@ echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc
 ```
 
 ### Working with Custom Mounts
-Custom mounts defined in `.ccbox.env` are automatically loaded when you run the container. The mounts support various options:
+Custom mounts defined in `.ccbox/mounts` are automatically loaded when you run the container. The mounts support various options:
 
 - `:ro` - Read-only access (recommended for data directories)
 - `:rw` - Read-write access (default)
@@ -288,8 +389,9 @@ Custom mounts defined in `.ccbox.env` are automatically loaded when you run the 
 
 Example usage with custom mounts:
 ```bash
-# Create your .ccbox.env file
-cat > .ccbox.env << EOF
+# Create your .ccbox/mounts file
+mkdir -p .ccbox
+cat > .ccbox/mounts << EOF
 MOUNT_DATA="/mnt/external/data:/mnt/data:ro"
 MOUNT_CACHE="/home/$USER/.mycache:/workspace/.cache:cached"
 EOF

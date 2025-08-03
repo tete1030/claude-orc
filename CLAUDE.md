@@ -1,8 +1,8 @@
-# CLAUDE.md
+# CLAUDE.md - Developer Guide for AI Agents
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance specifically for AI agents (like Claude Code) working on the Claude Multi-Agent Orchestrator codebase. This is your primary reference for development patterns, architecture decisions, and common pitfalls.
 
-**Note for AI agents**: This is your primary reference. Project documentation in `docs/` contains critical implementation details - you MUST read relevant docs before implementing features.
+**Critical**: This is developer documentation for agents building this system. For end-user documentation, see `docs/USAGE_GUIDE.md`.
 
 **Important**: After completing significant development work, update CLAUDE.md and TROUBLESHOOTING.md to reflect new patterns and lessons learned.
 
@@ -32,82 +32,83 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Documentation Creation Rule**: Only create documentation files when explicitly requested by the user. Module-specific READMEs are acceptable for explaining how to use specific modules. However, do NOT create task-specific documents in the main `docs/` folder - these clutter the general documentation and duplicate information already provided in conversation.
 
-## 🚀 Production Readiness Status
+## System Architecture Overview
 
-**This is a mature, production-ready system** - not a development prototype. All core components have been thoroughly tested and are ready for real-world deployment.
+**This is a mature, production-ready system** designed for orchestrating multiple Claude Code agents with sophisticated state management and communication protocols.
 
-### ✅ Production-Ready Features
-- **Robust Multi-Agent Orchestration**: Complete MCP integration with intelligent message routing
-- **Real-Time State Monitoring**: Advanced tmux-based agent state detection with 4-state classification
-- **Session Persistence**: Team sessions survive container restarts and system reboots
-- **Enterprise Docker Support**: Full containerization with isolation and shared communication channels  
-- **Background Process Management**: Production-grade process management with `claude-bg`
-- **Comprehensive Tooling**: Complete CLI toolchain (`ccdk` for Docker, `ccorc` for team sessions, diagnostic scripts, monitoring tools)
-- **Modern Python Stack**: Migrated to Poetry for dependency management and packaging
+### Core Architecture Components
 
-### 🎯 Deployment-Ready Components
-- **Core Orchestrator** (`orchestrator.py`) - Battle-tested message routing and agent coordination
-- **Enhanced Orchestrator** (`orchestrator_enhanced.py`) - Advanced state monitoring and intelligent delivery
-- **Session Manager** (`session_manager.py`) - Persistent team session management and registry
-- **MCP Central Server** (`mcp_central_server.py`) - Production MCP server implementation
-- **Agent State Monitor** (`agent_state_monitor.py`) - Real-time state detection system
-- **Tmux Manager** (`tmux_manager.py`) - Robust session and pane management
+#### Message Communication Layer
+- **MCP (Model Context Protocol)**: Inter-agent communication backbone
+- **Central Server** (`mcp_central_server.py`): Message routing hub with mailbox system
+- **Enhanced Delivery** (`message_delivery.py`): State-aware message routing logic
 
-### 📊 System Capabilities
-- **Multi-Agent Coordination**: Seamlessly orchestrate multiple Claude Code agents
-- **Intelligent Message Delivery**: Context-aware routing based on agent availability and state
-- **Persistent Team Sessions**: Resume coordinated work after restarts and interruptions
-- **Real-Time Monitoring**: Live agent state tracking with diagnostic tools
-- **Docker Isolation**: Complete containerized environments for secure agent separation
-- **Background Operations**: Non-blocking orchestrator operations with full process management
-- **Extensible Architecture**: Modular design supporting custom agent roles and workflows
+#### Agent State Management
+- **State Monitor** (`agent_state_monitor.py`): Real-time detection via tmux content analysis
+- **4-State Classification**: IDLE, BUSY, WRITING, ERROR/QUIT with priority-based detection
+- **Intelligent Routing**: Messages delivered based on recipient state
 
-### 🔧 Recent Modernization Achievements
-- **Poetry Migration**: Modern Python packaging and dependency management
-- **Enhanced Docker Integration**: Improved containerization with advanced CLI tooling
-- **Session Persistence System**: Container-based team session persistence without modifying ccdk
-- **Expanded Monitoring**: Comprehensive diagnostic and monitoring capabilities
-- **Production Toolchain**: Complete set of production-ready utilities and scripts
+#### Session Orchestration
+- **Base Orchestrator** (`orchestrator.py`): Core agent lifecycle and session management
+- **Enhanced Orchestrator** (`orchestrator_enhanced.py`): Adds state monitoring and intelligent delivery
+- **Session Manager** (`session_manager.py`): Persistent session registry and metadata
+- **Tmux Manager** (`tmux_manager.py`): Terminal session and pane coordination
 
-## Project Overview
+#### Containerization Layer
+- **Docker Integration**: Full containerization with ccbox (Claude Code Box)
+- **Workspace Configuration**: `.ccbox/` directory for environment customization
+- **Background Processing**: `claude-bg` for non-blocking operations
 
-**Claude Code Multi-Agent Orchestrator** - A framework for orchestrating multiple Claude Code agents with:
-- MCP (Model Context Protocol) integration for inter-agent communication
-- Intelligent message delivery based on agent states (IDLE, BUSY, WRITING, ERROR)
-- Persistent team sessions that survive container restarts and system reboots
-- Real-time agent state monitoring via tmux pane content analysis
-- Docker-based isolated agent environments
-- Background monitoring and automatic message queueing
+### Key Architectural Decisions
 
-## Project Structure
+1. **Tmux-Based State Detection**: Instead of complex agent APIs, we parse tmux pane content to detect Claude's actual state
+2. **MCP Communication**: Standardized protocol for agent-to-agent messaging
+3. **Enhanced vs Base Orchestrator**: Composition pattern where enhanced adds monitoring without modifying base
+4. **Container Isolation**: Docker provides clean separation while shared mounts enable communication
+5. **Poetry Migration**: Modern Python packaging for better dependency management
+
+## Codebase Navigation for Developers
+
+### Core Components Location Map
+
+#### Primary Source Code (`src/`)
+- **`orchestrator.py`**: Base orchestrator class - start here for understanding core agent lifecycle
+- **`orchestrator_enhanced.py`**: Enhanced orchestrator with state monitoring - most production deployments use this
+- **`agent_state_monitor.py`**: State detection logic - critical for understanding how agent states are determined
+- **`message_delivery.py`**: Intelligent message routing - handles state-aware delivery decisions
+- **`mcp_central_server.py`**: MCP server implementation - handles all inter-agent communication
+- **`tmux_manager.py`**: Terminal session management - abstracts tmux operations
+- **`session_manager.py`**: Persistent session registry - handles session metadata and recovery
+
+#### Examples (`examples/`)
+- **`team_mcp_demo.py`**: Basic orchestrator example - good starting point
+- **`team_mcp_demo_enhanced.py`**: Production-ready example with state monitoring
+
+#### Docker Environment (`docker/claude-code/`)
+- **`Dockerfile`**: Container definition with all dependencies
+- **`run-command-with-env.sh`**: Environment loading script that sources `.ccbox/init.sh`
+- **`session-monitor-daemon.sh`**: Background session monitoring
+
+#### CLI Tools (`bin/`)
+- **`ccdk`**: Docker container management - handles ccbox lifecycle
+- **`ccorc`**: Team session management - handles persistent sessions
+- **`claude-bg`**: Background process manager - essential for non-blocking operations
+
+#### Diagnostic Tools (`scripts/`)
+- **`diagnose_agent_states.py`**: Debug agent state detection issues
+- **`monitor_live_states.py`**: Real-time state monitoring for development
+- **`capture-state-snapshot.sh`**: Quick debugging utility
+
+### Project Structure Patterns
 ```
 orchestrator/
-├── .temp/                    # Temporary files and experiments (for AI agent use)
-├── docker/                   # Docker configuration files
-│   └── claude-code/         # Claude Code Docker environment
-├── docs/                     # Project documentation
-│   ├── FEATURE_MATRIX.md    # Feature comparison across phases
-│   ├── KNOWN_LIMITATIONS.md # Current limitations and workarounds
-│   └── research/            # Research findings and test results
-├── examples/                 # Example orchestrator configurations
-├── bin/                      # Executable scripts
-│   ├── claude-bg             # Background process manager
-│   └── ccdk                  # Docker management script
-├── scripts/                  # Utility scripts
-│   ├── install-claude-bg.sh  # Install claude-bg to PATH
-│   ├── install-ccdk.sh       # Install ccdk to PATH
-│   ├── diagnose_agent_states.py  # Agent state diagnostic tool
-│   └── monitor_live_states.py    # Live state monitoring tool
-├── src/                      # Main source code
-│   ├── agent_state_monitor.py    # Agent state detection
-│   ├── message_delivery.py       # Intelligent message routing
-│   ├── mcp_central_server.py     # MCP server implementation
-│   ├── orchestrator.py           # Base orchestrator
-│   ├── orchestrator_enhanced.py  # Enhanced orchestrator with state monitoring
-│   └── tmux_manager.py           # Tmux pane management
-└── tests/                    # Test suite
-    ├── integration/          # Integration tests
-    └── unit/                 # Unit tests
+├── .temp/                    # ALWAYS use for experiments and temporary files
+├── src/                      # Production code only after thorough testing
+├── examples/                 # Working examples for reference
+├── docs/                     # End-user and technical documentation
+├── tests/                    # Test suite (unit and integration)
+├── scripts/                  # Utility and diagnostic scripts
+└── docker/                   # Container environment definitions
 ```
 
 ## Core Development Principles
@@ -298,209 +299,148 @@ claude-bg logs team-demo_[timestamp]
 claude-bg stop team-demo_[timestamp]
 ```
 
-## Common Commands
+## Development Patterns and Best Practices
 
-### Running the Orchestrator
+### When to Use Enhanced vs Base Orchestrator
+- **Base Orchestrator** (`orchestrator.py`): Use for simple coordination without state monitoring
+- **Enhanced Orchestrator** (`orchestrator_enhanced.py`): Use for production - adds intelligent message delivery
+
+### State Detection Implementation Details
+The system uses tmux pane content analysis with specific detection priority:
+
+**Critical Pattern Recognition**:
+1. **ERROR** (highest priority): Recent error messages in last 5 lines
+2. **QUIT**: Agent has exited (no active process)
+3. **BUSY**: Processing indicator visible (matches Claude's format: `^.\s+(ProcessingWord)…`)
+4. **IDLE/WRITING**: Prompt box visible
+
+**Key Implementation Notes**:
+- Claude's processing indicator starts with rotating spinner + space + processing word
+- Detection order matters - check ERROR before BUSY before IDLE
+- State transitions trigger message delivery decisions
+
+### Message Delivery Strategy
+**Design Decision**: Claude Code handles input organization, so we deliver all messages but with contextual notifications:
+
+- **IDLE**: Standard delivery
+- **BUSY/WRITING**: Delivered with "check when convenient" note
+- **ERROR/QUIT**: Not delivered (filtered out)
+
+### Background Process Architecture
+**Critical for Bash Tool Limitations**: The Bash tool cannot run processes in background with `&`, so:
+
+1. **ALWAYS use `claude-bg`** for background processes
+2. **NEVER use `&` operator** in Bash tool commands
+3. **Sequential Operations**: Cannot run server + test simultaneously without background manager
+
+### Container Environment Loading
+The `.ccbox/` system enables workspace-specific configuration:
+
+**Loading Sequence**:
+1. Container starts with `run-command-with-env.sh`
+2. Script sources `${WORKSPACE_PATH}/.ccbox/init.sh` if exists
+3. Environment customization applied before command execution
+
+**Developer Guidelines**:
+- Use `${WORKSPACE_PATH}` for relative paths in init scripts
+- Conditional setup based on project file detection
+- Separate docker-specific environments (`.venv-docker/` not `.venv/`)
+
+### Testing and Validation Patterns
+
+#### State Detection Testing
 ```bash
-# Basic team demo
-python examples/team_mcp_demo.py
-
-# Enhanced demo with state monitoring
-python examples/team_mcp_demo_enhanced.py
-
-# With persistent session
-python examples/team_mcp_demo_enhanced.py --session-name my-project
-
-# Resume persistent session
-python examples/team_mcp_demo_enhanced.py --resume my-project
-
-# With custom model
-ANTHROPIC_MODEL=sonnet python examples/team_mcp_demo_enhanced.py
+# Use diagnostic tools to validate state detection
+python scripts/diagnose_agent_states.py <session> --single
+python scripts/monitor_live_states.py <session>  # Real-time validation
 ```
 
-### Interacting with Agents
-The orchestrator runs agents in tmux with mouse support and keyboard shortcuts:
+#### Component Testing Approach
+1. **Start in `.temp/`**: All experiments and tests go here first
+2. **Single Test Scripts**: Comprehensive tests that capture everything in parallel
+3. **Terminal Feature Isolation**: Test tmux features separately before implementing
+4. **State Tracking**: Always track previous state to avoid redundant updates
 
+#### Integration Testing Strategy
+- Test with real tmux sessions and Claude instances
+- Validate state transitions under load
+- Test message delivery across different states
+- Verify session persistence across container restarts
+
+## Common Development Pitfalls and Solutions
+
+### State Detection Issues
+
+**Problem**: False state detection or missed transitions
+**Root Causes**:
+- Processing indicators appear/disappear quickly
+- Multiple state indicators present simultaneously
+- Race conditions in tmux content capture
+
+**Solutions**:
+- Increased polling frequency for BUSY detection
+- Priority-based detection (ERROR > QUIT > BUSY > IDLE)
+- Buffer analysis for consistent state determination
+
+**Debug Approach**:
 ```bash
-# Attach to the session
-./scripts/attach-orchestrator.sh
-# or
-tmux attach -t team-mcp-demo
-
-# Navigate between agents:
-# F1 or Alt+1 - Leader
-# F2 or Alt+2 - Researcher  
-# F3 or Alt+3 - Writer
-# Mouse click - Switch to any pane
-# Mouse scroll - Navigate history
-
-# Standard tmux navigation also works:
-# Ctrl+b, 1 - Leader
-# Ctrl+b, 2 - Researcher
-# Ctrl+b, 3 - Writer
-
-# Use Claude shortcuts (press '?' in any pane)
-# Detach with Ctrl+b, d
+# Capture state snapshots during issues
+python scripts/diagnose_agent_states.py <session> --duration 60
+# Check for pattern matching issues in logs
 ```
 
-### Diagnostic Tools
-```bash
-# Monitor agent states in real-time
-python scripts/monitor_live_states.py <session-name>
+### Message Delivery Race Conditions
 
-# Capture detailed state data for analysis
-python scripts/diagnose_agent_states.py <session-name> --duration 120
+**Problem**: Duplicate notifications or missed messages
+**Root Causes**:
+- Agent state changes during message delivery
+- Reminder system triggering inappropriately
+- Base vs Enhanced orchestrator compatibility issues
 
-# Quick state snapshot when you see an issue
-python scripts/diagnose_agent_states.py <session-name> --single
-# or use the shortcut:
-./scripts/capture-state-snapshot.sh [session-name]
-# Saves to .temp/state_snapshot_TIMESTAMP.txt
-```
+**Solutions**:
+- Single notification format with convenience messaging
+- State-aware delivery decisions
+- Reminder reset logic when mailbox cleared
 
-### Session Management (ccorc)
+### Container Communication Issues
 
-#### Installation:
-```bash
-# Install ccorc to your PATH
-./scripts/install-ccorc.sh
-```
+**Problem**: Agents cannot communicate via MCP
+**Root Causes**:
+- Missing shared directory mount (`/tmp/claude-orc`)
+- Permission issues with socket files
+- Container isolation blocking communication
 
-#### Usage:
-```bash
-# List all team sessions
-ccorc list
+**Solutions**:
+- Ensure `/tmp/claude-orc` mounted in all containers
+- Use consistent user ID mapping across containers
+- Verify MCP server accessibility from all agents
 
-# Check team session health
-ccorc health my-project
+### Background Process Management
 
-# Clean up team sessions
-ccorc cleanup --interactive
-ccorc cleanup --remove my-project
+**Problem**: Background processes don't start or terminate unexpectedly
+**Root Causes**:
+- Using `&` operator with Bash tool (doesn't work)
+- Process not properly managed by `claude-bg`
+- Log output not captured
 
-# Export team session metadata
-ccorc export my-project --output ./backup/
-```
+**Solutions**:
+- ALWAYS use `claude-bg` for background processes
+- Check process status with `claude-bg status`
+- Monitor logs with `claude-bg logs`
 
-### Docker Management (ccdk)
+### Development Workflow Issues
 
-#### Installation:
-```bash
-# Install ccdk to your PATH
-./scripts/install-ccdk.sh
-```
+**Problem**: Code scattered across multiple files or cluttered project structure
+**Root Causes**:
+- Creating files outside `.temp/` during development
+- Multiple experimental versions in production directories
+- Not cleaning up after experiments
 
-#### Usage:
-```bash
-# Build image
-ccdk build
-
-# Run Claude with options
-ccdk run -i dev -m sonnet
-ccdk run --isolated
-
-# Start persistent container
-ccdk start -i frontend
-
-# Run Claude in existing container
-ccdk cc -i frontend
-ccdk cc -i frontend --help
-
-# Open shell
-ccdk shell -i frontend
-ccdk shell -i frontend python app.py
-
-# Other commands
-ccdk stop -i frontend    # Stop container
-ccdk logs -i frontend    # View logs
-ccdk list                # List all containers
-```
-
-## Production Deployment Best Practices
-
-### Environment Setup
-```bash
-# 1. Install system dependencies
-./scripts/install-claude-bg.sh    # Background process manager
-./scripts/install-ccdk.sh         # Docker management CLI
-
-# 2. Set up Python environment with Poetry
-poetry install --no-dev           # Production dependencies only
-poetry shell                      # Activate environment
-```
-
-### Configuration Management
-- **Environment Variables**: Use `.env` files for environment-specific configuration
-- **Model Selection**: Set `ANTHROPIC_MODEL` environment variable (default: sonnet)
-- **API Keys**: Ensure `ANTHROPIC_API_KEY` is properly configured
-- **Docker Mounts**: Verify `/tmp/claude-orc` is accessible for MCP communication
-
-### Deployment Patterns
-
-#### Standard Deployment
-```bash
-# Start orchestrator in background
-claude-bg start 'python examples/team_mcp_demo_enhanced.py' production-orchestrator
-
-# Monitor status
-claude-bg status production-orchestrator_[timestamp]
-claude-bg logs production-orchestrator_[timestamp]
-```
-
-#### Docker-Based Deployment
-```bash
-# Build production image
-ccdk build
-
-# Deploy isolated agents
-ccdk start -i leader
-ccdk start -i researcher  
-ccdk start -i writer
-
-# Run orchestrator connecting to containerized agents
-python examples/team_mcp_demo_enhanced.py
-```
-
-### Monitoring and Maintenance
-
-#### Health Checks
-```bash
-# Monitor agent states in real-time
-python scripts/monitor_live_states.py <session-name>
-
-# Diagnostic state capture
-python scripts/diagnose_agent_states.py <session-name> --duration 120
-```
-
-#### Session Management
-- **Graceful Shutdown**: Always use `claude-bg stop` rather than killing processes directly
-- **Session Cleanup**: Regular cleanup of orphaned tmux sessions using pattern matching
-- **Log Rotation**: Monitor and rotate background process logs as needed
-
-### Security Considerations
-- **API Key Protection**: Never commit API keys to version control
-- **Container Isolation**: Use Docker isolation for multi-tenant environments
-- **Network Security**: Ensure MCP communication channels are properly secured
-- **Process Permissions**: Run orchestrator with minimal required permissions
-
-### Performance Optimization
-- **State Monitoring Frequency**: Adjust polling intervals based on workload requirements
-- **Message Queue Limits**: Configure appropriate queue sizes for high-throughput scenarios
-- **Resource Allocation**: Monitor Docker container resource usage in production
-
-## Known Issues and Solutions
-
-### Agent State Detection
-- **Issue**: Processing indicators appear briefly
-- **Solution**: Increased polling frequency, check BUSY before IDLE
-
-### Message Delivery
-- **Issue**: Duplicate notifications when agent becomes idle
-- **Solution**: Single notification format with check_messages reminder
-
-### Docker Isolation
-- **Issue**: Agents need shared directory for MCP communication
-- **Solution**: Mount `/tmp/claude-orc` in all containers
+**Solutions**:
+- Start ALL experiments in `.temp/`
+- Move only ONE clean version to production after testing
+- Regular cleanup of temporary files
+- Use proper file organization patterns
 
 ## CLAUDE.md Maintenance Protocol
 
