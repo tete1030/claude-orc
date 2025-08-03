@@ -123,15 +123,15 @@ python orchestrator/scripts/monitor_live_states.py team-mcp-demo --duration 600 
 ## Example Analysis Session
 
 ```bash
-# Terminal 1: Start your orchestrator
+# Terminal 1: Start your team
 cd orchestrator
-python examples/team_mcp_demo_enhanced.py
+ccorc launch --team devops-team
 
-# Terminal 2: Start live monitor
-python scripts/monitor_live_states.py team-mcp-demo
+# Terminal 2: Start live monitor  
+python scripts/monitor_live_states.py devops-team
 
 # Terminal 3: Trigger agent activity via tmux
-tmux send-keys -t team-mcp-demo:0.0 "send_message to=Researcher message='Please analyze this codebase'" Enter
+tmux send-keys -t devops-team:0.0 "send_message to=Developer message='Please review this code'" Enter
 
 # Terminal 4: Capture diagnostic data
 python scripts/diagnose_agent_states.py team-mcp-demo --duration 60

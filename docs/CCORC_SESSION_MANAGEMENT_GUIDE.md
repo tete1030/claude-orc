@@ -29,7 +29,7 @@ The Claude Multi-Agent Orchestrator supports persistent **team contexts** that s
 ```bash
 # Team context management (coordinates multiple agents)
 ccorc list                    # Shows team contexts only
-python examples/team_mcp_demo_enhanced.py --context-name project-alpha
+ccorc launch --team devops-team --session project-alpha
 
 # Individual container management (single agents)
 ccdk list                          # Shows all containers
@@ -40,19 +40,23 @@ ccdk start -i my-dev-container     # Single container
 
 ### Creating a New Team Context
 ```bash
-# Create a new team context
-python examples/team_mcp_demo_enhanced.py --context-name my-project
+# Create a new team context using a pre-configured team
+ccorc launch --team devops-team --session my-project
 
 # This creates:
 # - Tmux session: my-project
-# - Team containers: my-project-leader, my-project-researcher, my-project-writer
+# - Team containers: my-project-architect, my-project-developer, etc.
 # - Session registry entry tracking all components
 ```
 
 ### Resuming an Existing Team Context
 ```bash
-# Resume a previous team context
-python examples/team_mcp_demo_enhanced.py --resume my-project
+# Resume a previous team context (containers restart automatically)
+ccorc launch --team devops-team --session my-project
+
+# Or use team context management commands
+ccorc info my-project     # Check status first
+ccorc health my-project   # Verify team health
 
 # This:
 # - Starts stopped team containers (if needed)
@@ -95,14 +99,14 @@ ccorc list --verbose
 ### Example Team Context Workflow
 ```bash
 # Day 1: Start team context
-python examples/team_mcp_demo_enhanced.py --context-name data-analysis
+ccorc launch --team data-team --session data-analysis
 # ... work with coordinated agents, team containers created and running
 
 # End of day: Stop session (team containers persist)
 # Team containers are stopped but not removed
 
 # Day 2: Resume team context  
-python examples/team_mcp_demo_enhanced.py --resume data-analysis
+ccorc launch --team data-team --session data-analysis
 # Team containers restart, all previous team context restored
 ```
 
@@ -132,7 +136,7 @@ ccdk start -i my-project-researcher
 ccdk start -i my-project-writer
 
 # Then resume team context
-python examples/team_mcp_demo_enhanced.py --resume my-project
+ccorc launch --team devops-team --session my-project
 ```
 
 ### Tmux Session Conflicts
@@ -146,7 +150,7 @@ tmux ls
 tmux attach -t my-project
 
 # Or force kill existing and recreate
-python examples/team_mcp_demo_enhanced.py --context-name my-project --force
+ccorc launch --team devops-team --session my-project --force
 ```
 
 ### Out of Disk Space
@@ -187,7 +191,7 @@ ccorc health my-project
 ### Development Workflow
 ```bash
 # 1. Start team context for new feature
-python examples/team_mcp_demo_enhanced.py --context-name feature-auth
+ccorc launch --team devops-team --session feature-auth
 
 # 2. Work with coordinated agents throughout development
 # (team containers automatically save state)
@@ -196,10 +200,10 @@ python examples/team_mcp_demo_enhanced.py --context-name feature-auth
 # (team containers stop but preserve coordinated state)
 
 # 4. Resume when returning to feature
-python examples/team_mcp_demo_enhanced.py --resume feature-auth
+ccorc launch --team devops-team --session feature-auth
 
 # 5. Clean up when feature is complete
-ccorc cleanup --remove feature-auth
+ccorc clean feature-auth
 ```
 
 ### Team Collaboration
@@ -211,11 +215,13 @@ ccorc cleanup --remove feature-auth
 
 ### Custom Team Container Configuration
 ```bash
-# Start team context with custom container settings
-python examples/team_mcp_demo_enhanced.py \
-  --context-name my-project \
-  --container-memory 4g \
-  --container-cpus 2
+# Start team context with custom settings
+ccorc launch --team devops-team --session my-project --debug
+
+# Override specific agent models
+ccorc launch --team devops-team --session my-project \
+  --agent-model "Architect=claude-3.5-sonnet" \
+  --agent-model "Developer=claude-3.5-haiku"
 ```
 
 ### Team Context Monitoring
@@ -272,10 +278,10 @@ tmux new-window -t my-project -n "monitoring"
 ### With Background Processes
 ```bash
 # Run team context in background
-claude-bg start 'python examples/team_mcp_demo_enhanced.py --context-name bg-task' session-runner
+claude-bg start 'ccorc launch --team devops-team --session bg-task' session-runner
 
-# Resume team context in background
-claude-bg start 'python examples/team_mcp_demo_enhanced.py --resume bg-task' session-resumer
+# Run different team in background
+claude-bg start 'ccorc launch --team security-team --session security-review' security-runner
 ```
 
 ## Session CLI Reference

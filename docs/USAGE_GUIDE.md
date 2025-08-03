@@ -10,52 +10,73 @@ This guide covers how to use the Claude Multi-Agent Orchestrator system for end 
 # Install system dependencies
 ./scripts/install-claude-bg.sh    # Background process manager
 ./scripts/install-ccdk.sh         # Docker management CLI
-./scripts/install-ccorc.sh        # Team session manager
+./scripts/install-ccorc.sh        # Team context manager
 
 # Set up Python environment with Poetry
 poetry install --no-dev           # Production dependencies only
 poetry shell                      # Activate environment
 ```
 
-## Running the Orchestrator
+## Getting Started with Teams
 
-### Basic Team Demo
+### List Available Teams
 ```bash
-# Basic team demo
-python examples/team_mcp_demo.py
+# See all pre-configured teams
+ccorc teams list
 
-# Enhanced demo with state monitoring
-python examples/team_mcp_demo_enhanced.py
-
-# With persistent team context
-python examples/team_mcp_demo_enhanced.py --context-name my-project
-
-# Resume persistent team context
-python examples/team_mcp_demo_enhanced.py --resume my-project
-
-# With custom model
-ANTHROPIC_MODEL=sonnet python examples/team_mcp_demo_enhanced.py
+# Shows teams like:
+# - devops-team: Complete DevOps team (5 agents)
+# - security-team: Cybersecurity team (4 agents)  
+# - data-team: Data engineering team (4 agents)
 ```
 
-### Session Conflict Handling
-The orchestrator detects existing tmux sessions to prevent accidental overwrites:
-- **Default behavior**: Fails with helpful error message if session exists
-- **Options when session exists**:
-  1. Attach to existing: `tmux attach -t <session-name>`
-  2. Kill existing: `tmux kill-session -t <session-name>`
-  3. Use `--force` flag to auto-kill existing session
-  4. Use `--context <name>` to specify a different context name
-
-Example usage:
+### Launch a Team
 ```bash
-# Will fail if session exists
-python examples/team_mcp_demo.py
+# Launch the DevOps team
+ccorc launch --team devops-team
+
+# Launch with custom session name
+ccorc launch --team devops-team --session my-project
+
+# Launch with different model
+ccorc launch --team devops-team --model claude-3.5-haiku
+
+# Override individual agent models
+ccorc launch --team devops-team --agent-model "Architect=claude-3.5-sonnet" --agent-model "Developer=claude-3.5-haiku"
 
 # Force kill existing session
-python examples/team_mcp_demo.py --force
+ccorc launch --team devops-team --force
 
-# Use different context name
-python examples/team_mcp_demo.py --context my-custom-context
+# Enable debug mode
+ccorc launch --team devops-team --debug
+```
+
+### Team Configuration
+Create custom teams using YAML files in the `teams/` directory:
+
+```yaml
+# teams/my-team.yaml
+team:
+  name: "My Custom Team"
+  description: "Custom team for specific tasks"
+
+agents:
+  - name: "Lead"
+    role: "Team Lead and Coordinator"
+    model: "claude-3.5-sonnet"
+  - name: "Specialist"
+    role: "Domain Expert"
+    model: "claude-3.5-sonnet"
+
+settings:
+  default_session_name: "my-team"
+  orchestrator_type: "enhanced"
+  poll_interval: 0.5
+```
+
+Launch your custom team:
+```bash
+ccorc launch --team my-team
 ```
 
 ## Interacting with Agents
@@ -63,33 +84,30 @@ python examples/team_mcp_demo.py --context my-custom-context
 The orchestrator runs agents in tmux with mouse support and keyboard shortcuts:
 
 ```bash
-# Attach to the session
-./scripts/attach-orchestrator.sh
+# Attach to the team session
+tmux attach -t devops-team
 # or
-tmux attach -t team-mcp-demo
+tmux attach -t my-project  # if you used --session my-project
 
 # Navigate between agents:
-# F1 or Alt+1 - Leader
-# F2 or Alt+2 - Researcher  
-# F3 or Alt+3 - Writer
+# F1-F5 or Alt+1-5 - Switch to agent panes
 # Mouse click - Switch to any pane
 # Mouse scroll - Navigate history
 
 # Standard tmux navigation also works:
-# Ctrl+b, 1 - Leader
-# Ctrl+b, 2 - Researcher
-# Ctrl+b, 3 - Writer
+# Ctrl+b, 1-5 - Switch to specific agent
+# Ctrl+b, arrow keys - Navigate panes
+# Ctrl+b, d - Detach from session
 
 # Use Claude shortcuts (press '?' in any pane)
-# Detach with Ctrl+b, d
 ```
 
 ## Background Process Management
 
 ### Using claude-bg
 ```bash
-# Start orchestrator example in background
-claude-bg start 'python examples/team_mcp_demo.py' team-demo
+# Start team in background
+claude-bg start 'ccorc launch --team devops-team --session bg-team' team-demo
 
 # Check status
 claude-bg status team-demo_[timestamp]
@@ -117,21 +135,26 @@ python scripts/diagnose_agent_states.py <session-name> --single
 # Saves to .temp/state_snapshot_TIMESTAMP.txt
 ```
 
-## Team Context Management (ccorc)
+## Team Context Management
+
+Teams automatically create persistent contexts that survive restarts:
 
 ```bash
-# List all team contexts
+# List all active team contexts
 ccorc list
 
-# Check team context health
+# Get detailed information about a team
+ccorc info my-project
+
+# Check team health
 ccorc health my-project
 
 # Clean up team contexts
-ccorc cleanup --interactive
-ccorc cleanup --remove my-project
+ccorc clean my-project
+ccorc clean my-project --force
 
 # Export team context metadata
-ccorc export my-project --output ./backup/
+ccorc export my-project my-project-backup.json
 ```
 
 ## Docker Management (ccdk)
@@ -304,12 +327,12 @@ poetry shell                      # Activate environment
 
 #### Standard Deployment
 ```bash
-# Start orchestrator in background
-claude-bg start 'python examples/team_mcp_demo_enhanced.py' production-orchestrator
+# Start team in background for production
+claude-bg start 'ccorc launch --team devops-team --session production' production-team
 
 # Monitor status
-claude-bg status production-orchestrator_[timestamp]
-claude-bg logs production-orchestrator_[timestamp]
+claude-bg status production-team_[timestamp]
+claude-bg logs production-team_[timestamp]
 ```
 
 #### Docker-Based Deployment
@@ -317,13 +340,8 @@ claude-bg logs production-orchestrator_[timestamp]
 # Build production image
 ccdk build
 
-# Deploy isolated agents
-ccdk start -i leader
-ccdk start -i researcher  
-ccdk start -i writer
-
-# Run orchestrator connecting to containerized agents
-python examples/team_mcp_demo_enhanced.py
+# Launch team with containerized agents
+ccorc launch --team devops-team --session production
 ```
 
 ### Monitoring and Maintenance

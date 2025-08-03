@@ -204,8 +204,8 @@ monitor = AgentStateMonitor(tmux_manager, anomaly_config)
 
 **Development Workflow:**
 ```bash
-# Start orchestrator
-python examples/team_mcp_demo_enhanced.py --session dev-session
+# Start team for development
+ccorc launch --team devops-team --session dev-session
 
 # Monitor in separate terminal
 python scripts/monitor_live_states.py dev-session --continuous-anomaly-recording --duration 1200 --anomaly-report-format json

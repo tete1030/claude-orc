@@ -57,37 +57,67 @@ This orchestrator enables multiple Claude agents to work together by:
 
 ## Quick Start
 
-### Quick Example - Team Collaboration Demo
+### Launch a Pre-Configured Team
+
+Get started with team-based configuration in seconds:
 
 ```bash
-cd orchestrator
-poetry run python examples/team_mcp_demo_enhanced.py
-# or activate the virtual environment first
-poetry shell
-python examples/team_mcp_demo_enhanced.py
+# List available teams
+ccorc teams list
+
+# Launch the DevOps team
+ccorc launch --team devops-team
+
+# Launch with custom session name
+ccorc launch --team devops-team --session my-project
 ```
 
-This runs a team of three agents (Leader, Researcher, Writer) with intelligent message delivery, agent state detection, and automatic notifications.
+This launches a complete team (Architect, Developer, QA, DevOps, Docs) with intelligent message delivery, agent state detection, and automatic notifications.
+
+### Team Configuration
+
+Create teams using YAML configuration files:
+
+```yaml
+# teams/my-team.yaml
+team:
+  name: "My Team"
+  description: "Custom team configuration"
+
+agents:
+  - name: "Lead"
+    role: "Team Lead"
+    model: "claude-3.5-sonnet"
+  - name: "Developer"
+    role: "Implementation Engineer"
+    model: "claude-3.5-sonnet"
+
+settings:
+  default_session_name: "my-team"
+  orchestrator_type: "enhanced"
+```
+
+Launch your custom team:
+```bash
+ccorc launch --team my-team
+```
 
 ### Persistent Team Contexts
 
-Create persistent team contexts that survive restarts:
+Teams automatically create persistent contexts that survive restarts:
 
 ```bash
-# Create a new persistent team context
-python examples/team_mcp_demo_enhanced.py --context-name my-project
-
-# Resume work later
-python examples/team_mcp_demo_enhanced.py --resume my-project
-
-# List all team contexts
+# List active team contexts
 ccorc list
 
+# Get detailed team status
+ccorc info my-project
+
 # Clean up when done
-ccorc cleanup --remove my-project
+ccorc clean my-project
 ```
 
-See the [Usage Guide](docs/USAGE_GUIDE.md) for complete details on persistent team contexts.
+See the [Team Configuration Guide](docs/TEAM_CONFIGURATION.md) for complete details on creating custom teams.
 
 ### Basic Example (Requires Authentication)
 
@@ -206,8 +236,16 @@ poetry run ./scripts/run_tests.sh
 
 ## Examples
 
+### Pre-Built Teams
+
+Explore the `examples/teams/` directory for ready-to-use team configurations:
+- `devops-team/`: Complete DevOps team (Architect, Developer, QA, DevOps, Docs)
+- `security-team/`: Cybersecurity team (Security Architect, Security Analyst, Developer, QA)
+- `data-team/`: Data engineering team (Data Architect, Data Engineer, ML Engineer, Analyst)
+
+### Utility Scripts
+
 See the `examples/` directory for:
-- `basic_two_agent.py`: Simple master-worker example
 - `verify_claude_setup.py`: Verify Claude CLI is properly installed
 
 ## Project Structure

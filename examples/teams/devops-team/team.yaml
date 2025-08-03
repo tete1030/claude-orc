@@ -1,0 +1,49 @@
+team:
+  name: "DevOps Team"
+  description: "Complete DevOps team for software development lifecycle"
+
+agents:
+  - name: "Architect"
+    role: "Team Lead and System Architect"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Developer"
+    role: "Implementation and Coding Engineer"
+    model: "claude-3.5-sonnet"
+    
+  - name: "QA"
+    role: "Quality Assurance Engineer"
+    model: "claude-3.5-sonnet"
+    
+  - name: "DevOps"
+    role: "Infrastructure and Deployment Engineer"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Docs"
+    role: "Documentation Specialist"
+    model: "claude-3.5-sonnet"
+
+settings:
+  default_session_name: "devops-team"
+  default_model: "claude-3.5-sonnet"
+  orchestrator_type: "enhanced"
+  poll_interval: 0.5
+  mcp_port: 8766
+  debug: false
+  container_mode: "isolated"
+
+workflow:
+  coordination_rules:
+    - "Plan before code - Architect leads design discussions"
+    - "Sequential validation - Development → QA → DevOps → Documentation"
+    - "Clear handoffs between team members"
+    - "No bypassing QA - all features must be tested"
+    - "DevOps validates deployment concerns"
+    - "Documentation reflects final tested features"
+  
+  communication_patterns:
+    - "Architect broadcasts major decisions"
+    - "Developer reports completion to QA"
+    - "QA reports test results to team"
+    - "DevOps provides infrastructure feedback"
+    - "Docs requests clarification when needed"

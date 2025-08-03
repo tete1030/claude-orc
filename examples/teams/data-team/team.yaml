@@ -1,0 +1,60 @@
+team:
+  name: "Data Engineering Team"
+  description: "Data engineering team focused on data pipelines, machine learning, and analytics"
+
+agents:
+  - name: "Data Architect"
+    role: "Data Architecture and Strategy Lead"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Data Engineer"
+    role: "Data Pipeline and Infrastructure Engineer"
+    model: "claude-3.5-sonnet"
+    
+  - name: "ML Engineer"
+    role: "Machine Learning and Model Development"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Analyst"
+    role: "Data Analysis and Business Intelligence"
+    model: "claude-3.5-sonnet"
+
+settings:
+  default_session_name: "data-team"
+  default_model: "claude-3.5-sonnet"
+  orchestrator_type: "enhanced"
+  poll_interval: 0.8
+  mcp_port: 8768
+  debug: false
+  container_mode: "shared"
+
+workflow:
+  coordination_rules:
+    - "Data-driven decisions - all recommendations must be backed by data"
+    - "Data architecture first - Data Architect designs data models and pipelines"
+    - "Quality data pipelines - Data Engineer implements robust data infrastructure"
+    - "Model validation - ML Engineer validates all machine learning implementations"
+    - "Business alignment - Analyst ensures outputs meet business requirements"
+    - "Iterative development - continuous improvement of data products"
+  
+  communication_patterns:
+    - "Data Architect broadcasts data strategy and architecture decisions"
+    - "Data Engineer reports pipeline status and infrastructure updates"
+    - "ML Engineer shares model performance and training results"
+    - "Analyst provides business insights and requirements feedback"
+    - "All team members collaborate on data quality and governance"
+
+data_focus:
+  primary_concerns:
+    - "Data quality and governance"
+    - "Scalable data pipelines"
+    - "Machine learning model lifecycle"
+    - "Business intelligence and analytics"
+    - "Data security and privacy"
+  
+  technologies:
+    - "Apache Spark and Kafka"
+    - "Python data stack (pandas, scikit-learn, PyTorch)"
+    - "SQL databases and data warehouses"
+    - "Cloud data platforms (AWS, GCP, Azure)"
+    - "MLOps and model deployment tools"

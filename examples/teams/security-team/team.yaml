@@ -1,0 +1,59 @@
+team:
+  name: "Security Team"
+  description: "Cybersecurity team focused on threat analysis, security testing, and secure development"
+
+agents:
+  - name: "Security Architect"
+    role: "Security Architecture and Policy Lead"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Security Analyst"
+    role: "Threat Analysis and Security Assessment"
+    model: "claude-3.5-sonnet"
+    
+  - name: "Developer"
+    role: "Secure Development and Implementation"
+    model: "claude-3.5-sonnet"
+    
+  - name: "QA"
+    role: "Security Testing and Validation"
+    model: "claude-3.5-sonnet"
+
+settings:
+  default_session_name: "security-team"
+  default_model: "claude-3.5-sonnet"
+  orchestrator_type: "enhanced"
+  poll_interval: 0.3
+  mcp_port: 8767
+  debug: true
+  container_mode: "isolated"
+
+workflow:
+  coordination_rules:
+    - "Security-first approach - all decisions must consider security implications"
+    - "Threat modeling before implementation - Security Architect leads analysis"
+    - "Security validation - Security Analyst validates all threat assessments"
+    - "Secure coding practices - Developer implements with security controls"
+    - "Security testing - QA performs penetration testing and vulnerability assessment"
+    - "No deployment without security approval"
+  
+  communication_patterns:
+    - "Security Architect broadcasts security policies and threat updates"
+    - "Security Analyst reports threat intelligence and risk assessments"
+    - "Developer reports security implementation status"
+    - "QA provides security test results and vulnerability reports"
+    - "All team members escalate security concerns immediately"
+
+security_focus:
+  primary_concerns:
+    - "Data protection and privacy"
+    - "Authentication and authorization"
+    - "Secure communications"
+    - "Vulnerability management"
+    - "Incident response"
+  
+  compliance_frameworks:
+    - "OWASP Top 10"
+    - "NIST Cybersecurity Framework"
+    - "SOC 2"
+    - "ISO 27001"

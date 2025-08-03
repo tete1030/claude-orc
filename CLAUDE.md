@@ -54,6 +54,11 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 - **Team Context Manager** (`team_context_manager.py`): Persistent team context registry and metadata
 - **Tmux Manager** (`tmux_manager.py`): Terminal session and pane coordination
 
+#### Team Configuration System
+- **Team Config Loader** (`team_config_loader.py`): YAML/JSON team configuration parser
+- **Pre-built Teams** (`examples/teams/`): Ready-to-use team configurations
+- **Team Launch System** (`ccorc`): CLI for launching and managing teams
+
 #### Containerization Layer
 - **Docker Integration**: Full containerization with ccbox (Claude Code Box)
 - **Workspace Configuration**: `.ccbox/` directory for environment customization
@@ -61,11 +66,12 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 
 ### Key Architectural Decisions
 
-1. **Tmux-Based State Detection**: Instead of complex agent APIs, we parse tmux pane content to detect Claude's actual state
-2. **MCP Communication**: Standardized protocol for agent-to-agent messaging
-3. **Enhanced vs Base Orchestrator**: Composition pattern where enhanced adds monitoring without modifying base
-4. **Container Isolation**: Docker provides clean separation while shared mounts enable communication
-5. **Poetry Migration**: Modern Python packaging for better dependency management
+1. **Team-Based Configuration**: YAML/JSON team configs replace manual Python scripting for better user experience
+2. **Tmux-Based State Detection**: Instead of complex agent APIs, we parse tmux pane content to detect Claude's actual state
+3. **MCP Communication**: Standardized protocol for agent-to-agent messaging
+4. **Enhanced vs Base Orchestrator**: Composition pattern where enhanced adds monitoring without modifying base
+5. **Container Isolation**: Docker provides clean separation while shared mounts enable communication
+6. **CLI-First Experience**: `ccorc` provides user-friendly team management without requiring Python knowledge
 
 ## Codebase Navigation for Developers
 
@@ -80,9 +86,10 @@ This file provides guidance specifically for AI agents (like Claude Code) workin
 - **`tmux_manager.py`**: Terminal session management - abstracts tmux operations
 - **`team_context_manager.py`**: Persistent team context registry - handles team context metadata and recovery
 
-#### Examples (`examples/`)
-- **`team_mcp_demo.py`**: Basic orchestrator example - good starting point
-- **`team_mcp_demo_enhanced.py`**: Production-ready example with state monitoring
+#### Team Configurations (`examples/teams/`)
+- **`devops-team/`**: Complete DevOps team configuration - good starting point for understanding team structure
+- **`security-team/`**: Cybersecurity team example - demonstrates specialized team workflows
+- **`data-team/`**: Data engineering team example - shows multi-role team coordination
 
 #### Docker Environment (`docker/claude-code/`)
 - **`Dockerfile`**: Container definition with all dependencies
@@ -261,13 +268,13 @@ The orchestrator now detects existing tmux sessions to prevent accidental overwr
 Example usage:
 ```bash
 # Will fail if session exists
-python examples/team_mcp_demo.py
+ccorc launch --team devops-team
 
 # Force kill existing session
-python examples/team_mcp_demo.py --force
+ccorc launch --team devops-team --force
 
 # Use different session name
-python examples/team_mcp_demo.py --session my-custom-session
+ccorc launch --team devops-team --session my-custom-session
 ```
 
 ## Background Process Management
@@ -286,8 +293,8 @@ python examples/team_mcp_demo.py --session my-custom-session
 
 ### Usage:
 ```bash
-# Start orchestrator example in background
-claude-bg start 'python examples/team_mcp_demo.py' team-demo
+# Start team in background
+claude-bg start 'ccorc launch --team devops-team --session bg-demo' team-demo
 
 # Check status
 claude-bg status team-demo_[timestamp]
@@ -301,9 +308,37 @@ claude-bg stop team-demo_[timestamp]
 
 ## Development Patterns and Best Practices
 
+### Team Configuration Development
+
+#### Creating Custom Teams
+1. **Start with Examples**: Use `examples/teams/devops-team/` as a template
+2. **YAML Structure**: Follow the established team.yaml format with team, agents, and settings sections
+3. **Agent Prompts**: Create `.md` files for agent-specific prompts (optional but recommended)
+4. **Test Early**: Use `ccorc launch --team your-team` to test configurations immediately
+
+#### Team Configuration Patterns
+```yaml
+# Standard team structure
+team:
+  name: "Team Name"
+  description: "Clear team purpose"
+
+agents:
+  - name: "Lead"           # Coordinator role
+    role: "Team Lead"
+    model: "claude-3.5-sonnet"
+  - name: "Specialist"     # Domain expert
+    role: "Domain Expert"
+    model: "claude-3.5-sonnet"
+
+settings:
+  orchestrator_type: "enhanced"  # Always use enhanced for production
+  poll_interval: 0.5            # Adjust based on team responsiveness needs
+```
+
 ### When to Use Enhanced vs Base Orchestrator
 - **Base Orchestrator** (`orchestrator.py`): Use for simple coordination without state monitoring
-- **Enhanced Orchestrator** (`orchestrator_enhanced.py`): Use for production - adds intelligent message delivery
+- **Enhanced Orchestrator** (`orchestrator_enhanced.py`): Use for production - adds intelligent message delivery (default for team configs)
 
 ### State Detection Implementation Details
 The system uses tmux pane content analysis with specific detection priority:
