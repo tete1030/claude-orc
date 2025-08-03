@@ -189,6 +189,10 @@ RUN chmod +x /usr/local/bin/claude-bg
 COPY bin/ccdk /usr/local/bin/ccdk
 RUN chmod +x /usr/local/bin/ccdk
 
+# Copy ccorc for Docker container management
+COPY bin/ccorc /usr/local/bin/ccorc
+RUN chmod +x /usr/local/bin/ccorc
+
 # Copy entrypoint script
 # Copy container scripts
 COPY docker/claude-code/entrypoint.sh /usr/local/bin/entrypoint.sh
