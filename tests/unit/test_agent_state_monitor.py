@@ -560,14 +560,13 @@ More conversation...
         self.assertEqual(state, AgentState.IDLE, "Multiple feedback interactions should not affect detection")
 
     def test_ui_anomaly_detection_functionality(self):
-        """Test that UI anomaly detection correctly identifies unknown patterns"""
+        """Test that UI anomaly detection correctly identifies structural anomalies"""
         self._set_agent_as_initialized()
         
-        # Content with known good patterns - should have few/no anomalies
+        # Content with normal structure - should have no anomalies
         normal_content = """
 ✻ Processing… (2s · esc to interrupt)
 ↓ 145 tokens
-esc to interrupt)
 
 ╭─────────────────────────────────────────────────────────────╮
 │ >                                                           │
@@ -575,23 +574,43 @@ esc to interrupt)
   ? for shortcuts                       Bypassing Permissions
 """
         anomalies = self.monitor.detect_ui_anomalies(normal_content)
-        self.assertLessEqual(len(anomalies), 1, "Normal content should have minimal anomalies")
+        self.assertEqual(len(anomalies), 0, "Normal structure should have no anomalies")
         
-        # Content with clear anomalies - should detect them
-        anomaly_content = """
-UNKNOWN_NEW_PATTERN: This shouldn't be here
-🚨 Brand new UI element
-Unexpected line that doesn't match patterns
-
+        # Content with structural anomalies - should detect them
+        structural_anomaly_content = """
 ✻ Processing… (2s · esc to interrupt)
 
 ╭─────────────────────────────────────────────────────────────╮
 │ >                                                           │
 ╰─────────────────────────────────────────────────────────────╯
-  ? for shortcuts                       Bypassing Permissions
+
+╭─────────────────────────────────────────────────────────────╮
+│ > Another prompt box                                        │
+╰─────────────────────────────────────────────────────────────╯
 """
-        anomalies = self.monitor.detect_ui_anomalies(anomaly_content)
-        self.assertGreaterEqual(len(anomalies), 2, "Should detect multiple anomalies in problematic content")
+        anomalies = self.monitor.detect_ui_anomalies(structural_anomaly_content)
+        self.assertGreaterEqual(len(anomalies), 1, "Should detect multiple prompt boxes as anomaly")
+        
+        # Content with incomplete prompt box
+        incomplete_box_content = """
+✻ Processing… (2s · esc to interrupt)
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           
+"""
+        anomalies = self.monitor.detect_ui_anomalies(incomplete_box_content)
+        self.assertGreaterEqual(len(anomalies), 1, "Should detect incomplete prompt box")
+        
+        # Content with unusual box characters
+        unusual_chars_content = """
+✻ Processing… (2s · esc to interrupt)
+
+┌─────────────────────────────────────────────────────────────┐
+│ >                                                           │
+└─────────────────────────────────────────────────────────────┘
+"""
+        anomalies = self.monitor.detect_ui_anomalies(unusual_chars_content)
+        self.assertGreaterEqual(len(anomalies), 1, "Should detect unusual box characters")
         
         # Verify anomaly structure
         if anomalies:

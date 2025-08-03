@@ -279,65 +279,101 @@ class AgentStateMonitor:
     
     def detect_ui_anomalies(self, pane_content: str) -> list:
         """
-        Detect potential new UI elements that might affect state detection.
+        Detect structural anomalies in UI layout.
+        Focuses on UI structure, not content.
         Returns list of anomalies found.
         """
         anomalies = []
         lines = pane_content.split('\n')
         
-        # Find the last prompt box
-        prompt_box_idx = -1
-        for i in range(len(lines) - 1, -1, -1):
-            line = lines[i]
-            if '╭' in line and '╮' in line and '─' in line:
-                # Verify this is an input box
-                for j in range(i + 1, min(i + 4, len(lines))):
-                    if j < len(lines) and '│' in lines[j] and '>' in lines[j]:
-                        prompt_box_idx = i
-                        break
-                if prompt_box_idx >= 0:
-                    break
+        # Structural patterns
+        PROMPT_BOX_TOP = r'╭[─]+╮'
+        PROMPT_BOX_MIDDLE = r'│.*│'
+        PROMPT_BOX_BOTTOM = r'╰[─]+╯'
+        SHORTCUTS_LINE = r'\? for shortcuts'
+        PERMISSIONS_LINE = r'Bypassing Permissions'
         
-        if prompt_box_idx > 0:
-            # Known good patterns
-            known_patterns = [
-                r'^[●•⎿▸▹▪▫◆◇○◉◎⬤⬥⬦⬧⬨⬩]',  # Various bullet/indicator symbols
-                r'^(✻|✽|✢|✤|✧|★|✿|❀|✸|✹|✺|✻|✼|✽|✾|✿|❀|❁|❂|❃|❄|❅|❆|❇|❈|❉|❊)',  # Processing spinners
-                r'^\s*>\s*\[MESSAGE\]',  # Message notifications
-                r'esc to interrupt',  # Processing info
-                r'\? for shortcuts',  # Standard footer
-                r'Context left until',  # Context indicator
-                r'Bypassing Permissions',  # Standard footer
-                r'tokens',  # Token count
-                r'Tool uses',  # Tool usage
-                r'ctrl\+r to expand',  # Expansion hint
-            ]
-            
-            # Check lines above prompt box for unexpected content
-            for i in range(max(0, prompt_box_idx - 15), prompt_box_idx):
-                line = lines[i].strip()
-                if not line or len(line) < 4:
-                    continue
+        # Find all prompt boxes
+        prompt_boxes = []
+        i = 0
+        while i < len(lines):
+            if re.match(PROMPT_BOX_TOP, lines[i]):
+                box = {'top': i, 'middle': [], 'bottom': None}
+                i += 1
                 
-                # Skip if it matches known good patterns
-                is_known = False
-                for pattern in known_patterns:
-                    if re.search(pattern, line):
-                        is_known = True
+                # Find middle and bottom
+                while i < len(lines) and i < box['top'] + 10:  # Reasonable box size limit
+                    if re.match(PROMPT_BOX_MIDDLE, lines[i]):
+                        box['middle'].append(i)
+                        i += 1
+                    elif re.match(PROMPT_BOX_BOTTOM, lines[i]):
+                        box['bottom'] = i
+                        break
+                    else:
                         break
                 
-                # Skip if it's a feedback UI element
-                for pattern in self.FEEDBACK_UI_PATTERNS:
-                    if re.search(pattern, line):
-                        is_known = True
-                        break
-                
-                if not is_known:
+                if box['bottom'] is not None:
+                    prompt_boxes.append(box)
+                else:
+                    # Incomplete box is an anomaly
                     anomalies.append({
-                        'line_num': i,
-                        'content': line,
-                        'context': lines[max(0, i-2):min(len(lines), i+3)]
+                        'line_num': box['top'],
+                        'content': f"Incomplete prompt box starting at line {box['top']}",
+                        'context': lines[box['top']:min(len(lines), box['top']+5)]
                     })
+            i += 1
+        
+        # Check for structural anomalies
+        
+        # 1. Multiple prompt boxes (unusual)
+        if len(prompt_boxes) > 1:
+            anomalies.append({
+                'line_num': prompt_boxes[1]['top'],
+                'content': f"Multiple prompt boxes detected ({len(prompt_boxes)} found)",
+                'context': []
+            })
+        
+        # 2. No prompt box (might be initializing or error state)
+        # Don't flag as anomaly since this is common during initialization
+        
+        # 3. Check for unexpected structural elements
+        # Check ALL lines, not just above prompt boxes
+        for i in range(len(lines)):
+            line = lines[i].strip()
+            if not line:
+                continue
+            
+            # Skip lines that are part of valid prompt boxes
+            skip_line = False
+            for box in prompt_boxes:
+                if box['top'] <= i <= box['bottom']:
+                    skip_line = True
+                    break
+            
+            if skip_line:
+                continue
+            
+            # Check for unusual separators
+            if re.match(r'^[═━┃┏┓┗┛]+$', line) and len(line) > 10:
+                anomalies.append({
+                    'line_num': i,
+                    'content': line,
+                    'context': lines[max(0, i-2):min(len(lines), i+3)]
+                })
+            
+            # Check for box chars outside expected areas
+            unexpected_box_chars = ['┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼']
+            if any(char in line for char in unexpected_box_chars):
+                anomalies.append({
+                    'line_num': i,
+                    'content': line,
+                    'context': lines[max(0, i-2):min(len(lines), i+3)]
+                })
+        
+        # 4. Footer elements are OPTIONAL - do not check for them
+        # "? for shortcuts" only appears when input box is empty
+        # "Bypassing Permissions" can be hidden by startup parameters
+        # These are not structural requirements
         
         return anomalies
     

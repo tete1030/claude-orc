@@ -36,7 +36,7 @@ class MessageDeliverySystem:
         self._last_notification_time = {}
         
     def send_message_to_agent(self, to_agent: str, from_agent: str, message_content: str, priority: str = "normal") -> bool:
-        """Send message to agent with state awareness"""
+        """Send message to agent - always delivers regardless of state"""
         # Check if recipient exists
         if to_agent not in self.orchestrator.agents:
             self.logger.error(f"Agent {to_agent} not found")
@@ -44,11 +44,6 @@ class MessageDeliverySystem:
             
         # Use lock to ensure sequential delivery
         with self._delivery_lock:
-            recipient = self.orchestrator.agents[to_agent]
-            
-            # Update agent state
-            state = self.state_monitor.update_agent_state(to_agent, recipient.pane_index)
-            
             # Create message object (use 'message' field to match MCP server format)
             message = {
                 'from': from_agent,
@@ -58,57 +53,9 @@ class MessageDeliverySystem:
                 'timestamp': time.time()
             }
             
-            # Handle based on agent state
-            if state == AgentState.IDLE:
-                # Agent is idle, deliver immediately
-                self.logger.info(f"Agent {to_agent} is idle, delivering message immediately")
-                return self._deliver_message_now(to_agent, message)
-                
-            elif state in (AgentState.BUSY, AgentState.WRITING):
-                # Agent is busy or writing
-                state_desc = "busy" if state == AgentState.BUSY else "writing"
-                self.logger.info(f"Agent {to_agent} is {state_desc}, delivering notification anyway")
-                
-                # Add to orchestrator mailbox for persistence
-                if to_agent not in self.orchestrator.mailbox:
-                    self.orchestrator.mailbox[to_agent] = []
-                self.orchestrator.mailbox[to_agent].append(message)
-                
-                # Reset idle reminder flag since there's a new message
-                self.idle_reminder_sent[to_agent] = False
-                
-                # Send notification even though agent is busy
-                # Claude Code will handle organizing the inputs
-                agent = self.orchestrator.agents[to_agent]
-                notification = self.notification.notification_format.format(
-                    prefix=self.notification.prefix,
-                    sender=message['from']
-                )
-                
-                # Ensure minimum delay between notifications to same agent
-                last_time = self._last_notification_time.get(to_agent, 0)
-                time_since_last = time.time() - last_time
-                if time_since_last < 0.2:  # 200ms minimum between notifications
-                    time.sleep(0.2 - time_since_last)
-                
-                self.tmux.send_to_pane(agent.pane_index, notification)
-                self._last_notification_time[to_agent] = time.time()
-                
-                self.logger.info(f"Sent notification to {to_agent} despite {state_desc} state")
-                return True
-                
-            elif state == AgentState.ERROR:
-                self.logger.error(f"Agent {to_agent} is in error state, cannot deliver message")
-                return False
-                
-            elif state == AgentState.QUIT:
-                self.logger.error(f"Agent {to_agent} has quit, cannot deliver message")
-                return False
-                
-            else:
-                # Unknown state, try to deliver anyway
-                self.logger.warning(f"Agent {to_agent} in unknown state, attempting delivery")
-                return self._deliver_message_now(to_agent, message)
+            # Always deliver the message
+            self.logger.info(f"Delivering message to {to_agent}")
+            return self._deliver_message_now(to_agent, message)
             
     def _deliver_message_now(self, agent_name: str, message: Dict) -> bool:
         """Deliver message immediately to agent"""
@@ -149,27 +96,13 @@ class MessageDeliverySystem:
     def check_and_deliver_pending_messages(self) -> None:
         """Check all agents and send idle reminders for unread messages
         
-        This method now:
-        1. Clears any legacy queued messages
-        2. Sends reminders to idle agents who have unread messages
+        Simplified version that only checks mailbox and sends reminders to IDLE agents
         """
         for agent_name, agent in self.orchestrator.agents.items():
-            # Update state
+            # Update state just for logging/reminder purposes
             state = self.state_monitor.update_agent_state(agent_name, agent.pane_index)
             
-            # First, handle any legacy pending messages (from before the change)
-            if self.state_monitor.has_pending_messages(agent_name):
-                pending_messages = self.state_monitor.get_pending_messages(agent_name)
-                
-                if pending_messages:
-                    self.logger.info(f"Clearing {len(pending_messages)} legacy pending messages for {agent_name}")
-                    
-                    # Add all pending messages to mailbox
-                    if agent_name not in self.orchestrator.mailbox:
-                        self.orchestrator.mailbox[agent_name] = []
-                    self.orchestrator.mailbox[agent_name].extend(pending_messages)
-            
-            # Now check for idle reminders
+            # Only send reminders to idle agents
             if state == AgentState.IDLE:
                 # Check if agent has unread messages in mailbox
                 mailbox_count = len(self.orchestrator.mailbox.get(agent_name, []))
@@ -199,11 +132,6 @@ class MessageDeliverySystem:
             
         agent = self.orchestrator.agents[agent_name]
         
-        # Check if agent is idle before sending
-        state = self.state_monitor.update_agent_state(agent_name, agent.pane_index)
-        if state != AgentState.IDLE:
-            self.logger.warning(f"Agent {agent_name} is not idle (state: {state.value}), may not accept input")
-            
         # Type the text without pressing Enter
         return self.tmux.type_in_pane(agent.pane_index, text)
         

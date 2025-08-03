@@ -75,27 +75,27 @@ class TestMessageDeliverySystem(unittest.TestCase):
         self.assertIn("Agent1", self.mock_orchestrator.mailbox)
         self.assertEqual(len(self.mock_orchestrator.mailbox["Agent1"]), 1)
         
-    def test_send_message_to_error_agent_fails(self):
-        """Test sending message to agent in error state fails"""
+    def test_send_message_to_error_agent_succeeds(self):
+        """Test sending message to agent in error state succeeds (state-agnostic delivery)"""
         self.mock_state_monitor.update_agent_state.return_value = AgentState.ERROR
         
         result = self.delivery.send_message_to_agent(
             "Agent1", "Agent2", "Test message", "normal"
         )
         
-        self.assertFalse(result)
-        self.mock_tmux.send_to_pane.assert_not_called()
+        self.assertTrue(result)
+        self.mock_tmux.send_to_pane.assert_called_once()
         
-    def test_send_message_to_quit_agent_fails(self):
-        """Test sending message to quit agent fails"""
+    def test_send_message_to_quit_agent_succeeds(self):
+        """Test sending message to quit agent succeeds (state-agnostic delivery)"""
         self.mock_state_monitor.update_agent_state.return_value = AgentState.QUIT
         
         result = self.delivery.send_message_to_agent(
             "Agent1", "Agent2", "Test message", "normal"
         )
         
-        self.assertFalse(result)
-        self.mock_tmux.send_to_pane.assert_not_called()
+        self.assertTrue(result)
+        self.mock_tmux.send_to_pane.assert_called_once()
         
     def test_send_message_to_unknown_agent_fails(self):
         """Test sending message to unknown agent fails"""
@@ -138,6 +138,125 @@ class TestMessageDeliverySystem(unittest.TestCase):
         calls = self.mock_tmux.send_to_pane.call_args_list
         self.assertTrue(any("[MESSAGE]" in str(call) for call in calls))
         self.assertTrue(any("Reminder" in str(call) for call in calls))
+        
+    def test_reminder_system_complete_flow(self):
+        """Test complete reminder system flow"""
+        # 1. Agent is BUSY with unread messages → No reminder sent
+        self.mock_state_monitor.update_agent_state.return_value = AgentState.BUSY
+        self.mock_orchestrator.mailbox["Agent1"] = [
+            {'from': 'Agent2', 'message': 'Unread message'}
+        ]
+        
+        self.delivery.check_and_deliver_pending_messages()
+        
+        # No reminders should be sent to busy agent
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        busy_reminder_calls = [call for call in calls if "Reminder" in str(call)]
+        self.assertEqual(len(busy_reminder_calls), 0, "No reminders should be sent to busy agent")
+        
+        # Reset mock
+        self.mock_tmux.reset_mock()
+        
+        # 2. Agent becomes IDLE → Reminder sent once
+        self.mock_state_monitor.update_agent_state.return_value = AgentState.IDLE
+        
+        self.delivery.check_and_deliver_pending_messages()
+        
+        # Should send exactly one reminder
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        idle_reminder_calls = [call for call in calls if "Reminder" in str(call)]
+        self.assertEqual(len(idle_reminder_calls), 1, "Should send exactly one reminder to idle agent")
+        
+        # Reset mock
+        self.mock_tmux.reset_mock()
+        
+        # 3. Agent stays IDLE → No duplicate reminders
+        self.delivery.check_and_deliver_pending_messages()
+        
+        # Should not send another reminder
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        duplicate_reminder_calls = [call for call in calls if "Reminder" in str(call)]
+        self.assertEqual(len(duplicate_reminder_calls), 0, "Should not send duplicate reminders")
+        
+        # 4. New message arrives → Reminder flag resets automatically
+        # Reset mock
+        self.mock_tmux.reset_mock()
+        
+        # Send new message (this will reset the reminder flag)
+        result = self.delivery.send_message_to_agent(
+            "Agent2", "Agent1", "New message after check", "normal"
+        )
+        self.assertTrue(result)
+        
+        # Reset mock to check only reminder calls
+        self.mock_tmux.reset_mock()
+        
+        # Should send reminder again since flag was reset by new message
+        self.delivery.check_and_deliver_pending_messages()
+        
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        reset_reminder_calls = [call for call in calls if "Reminder" in str(call)]
+        self.assertEqual(len(reset_reminder_calls), 1, "Should send reminder again after flag reset by new message")
+
+    def test_reminder_flag_reset_on_new_message(self):
+        """Test that reminder flag resets when new messages arrive"""
+        # Set up agent as idle with reminder already sent
+        self.mock_state_monitor.update_agent_state.return_value = AgentState.IDLE
+        self.mock_orchestrator.mailbox["Agent1"] = [
+            {'from': 'Agent2', 'message': 'First message'}
+        ]
+        
+        # Send first reminder
+        self.delivery.check_and_deliver_pending_messages()
+        
+        # Reset mock
+        self.mock_tmux.reset_mock()
+        
+        # Check again - should not send duplicate
+        self.delivery.check_and_deliver_pending_messages()
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        self.assertEqual(len([call for call in calls if "Reminder" in str(call)]), 0)
+        
+        # Reset mock
+        self.mock_tmux.reset_mock()
+        
+        # Simulate new message arriving (which resets the flag in send_message_to_agent)
+        result = self.delivery.send_message_to_agent(
+            "Agent2", "Agent1", "New message", "normal"
+        )
+        self.assertTrue(result)
+        
+        # Reset mock to check only reminder calls
+        self.mock_tmux.reset_mock()
+        
+        # Now check_and_deliver should send reminder again
+        self.delivery.check_and_deliver_pending_messages()
+        
+        calls = self.mock_tmux.send_to_pane.call_args_list
+        reminder_calls = [call for call in calls if "Reminder" in str(call)]
+        self.assertEqual(len(reminder_calls), 1, "Should send reminder after new message resets flag")
+
+    def test_no_reminders_for_non_idle_states(self):
+        """Test that reminders are only sent to idle agents"""
+        states_to_test = [AgentState.BUSY, AgentState.WRITING, AgentState.ERROR, AgentState.QUIT, AgentState.INITIALIZING]
+        
+        for state in states_to_test:
+            with self.subTest(state=state):
+                # Reset mock
+                self.mock_tmux.reset_mock()
+                
+                # Set agent state and add unread messages
+                self.mock_state_monitor.update_agent_state.return_value = state
+                self.mock_orchestrator.mailbox["Agent1"] = [
+                    {'from': 'Agent2', 'message': f'Message for {state.value} agent'}
+                ]
+                
+                self.delivery.check_and_deliver_pending_messages()
+                
+                # Should not send any reminders
+                calls = self.mock_tmux.send_to_pane.call_args_list
+                reminder_calls = [call for call in calls if "Reminder" in str(call)]
+                self.assertEqual(len(reminder_calls), 0, f"Should not send reminders to {state.value} agent")
         
     def test_send_text_to_agent_input(self):
         """Test sending text to agent input field"""

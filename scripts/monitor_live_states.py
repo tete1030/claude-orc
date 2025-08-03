@@ -30,6 +30,8 @@ class LiveStateMonitor:
         self.monitor = AgentStateMonitor(self.tmux)
         self.history: List[Dict[str, Any]] = []
         self.max_history = 100
+        self.anomalies_detected = False
+        self.anomaly_data = {}
         
     def get_current_states(self) -> Dict[str, Any]:
         """Get current state of all agents"""
@@ -43,6 +45,22 @@ class LiveStateMonitor:
             state = self.monitor.update_agent_state(f"Agent{i}", i)
             recent_content = self.tmux.capture_pane(i, history_limit=-10)
             last_line = recent_content.split('\n')[-1] if recent_content else ""
+            
+            # Check for anomalies
+            full_content = self.tmux.capture_pane(i, history_limit=-50)
+            anomalies = self.monitor.detect_ui_anomalies(full_content) if full_content else []
+            
+            # If anomalies found, capture them
+            if anomalies:
+                if not self.anomalies_detected:
+                    self.anomalies_detected = True
+                if f"Agent{i}" not in self.anomaly_data:
+                    self.anomaly_data[f"Agent{i}"] = {
+                        "pane_index": i,
+                        "anomalies": anomalies,
+                        "full_content": full_content,
+                        "timestamp": datetime.now()
+                    }
             
             # Check for processing indicators
             processing_indicator = None
@@ -60,10 +78,54 @@ class LiveStateMonitor:
                 "state": state.value,
                 "last_line": last_line[:80],  # Truncate for display
                 "processing_indicator": processing_indicator,
-                "has_prompt": "│ >" in recent_content if recent_content else False
+                "has_prompt": "│ >" in recent_content if recent_content else False,
+                "anomaly_count": len(anomalies)
             })
             
         return states
+        
+    def save_anomalies(self):
+        """Save detected anomalies to file"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f".temp/anomaly_capture_{timestamp}.txt"
+        
+        with open(filename, 'w') as f:
+            f.write(f"=== ANOMALY CAPTURE ===\n")
+            f.write(f"Session: {self.session_name}\n")
+            f.write(f"Capture Time: {datetime.now()}\n")
+            f.write(f"Total Anomalies Detected: {sum(len(data['anomalies']) for data in self.anomaly_data.values())}\n")
+            f.write("=" * 60 + "\n\n")
+            
+            for agent_name, data in self.anomaly_data.items():
+                f.write(f"=== {agent_name} (Pane {data['pane_index']}) ===\n")
+                f.write(f"Anomalies found: {len(data['anomalies'])}\n")
+                f.write(f"Detection time: {data['timestamp']}\n\n")
+                
+                # Write anomalies
+                for i, anomaly in enumerate(data['anomalies']):
+                    f.write(f"Anomaly {i+1}:\n")
+                    f.write(f"  Line: {anomaly.get('line_num', 'N/A')}\n")
+                    f.write(f"  Content: {anomaly['content']}\n")
+                    if 'context' in anomaly and anomaly['context']:
+                        f.write("  Context:\n")
+                        for ctx_line in anomaly['context']:
+                            f.write(f"    {ctx_line}\n")
+                    f.write("\n")
+                
+                # Write full pane content
+                f.write("Full Pane Content:\n")
+                f.write("-" * 60 + "\n")
+                f.write(data['full_content'])
+                f.write("\n" + "=" * 60 + "\n\n")
+        
+        print(f"\nAnomalies saved to: {filename}")
+        
+        # Print summary
+        print("\nAnomaly Summary:")
+        for agent_name, data in self.anomaly_data.items():
+            print(f"  {agent_name}: {len(data['anomalies'])} anomaly(ies)")
+            for i, anomaly in enumerate(data['anomalies']):
+                print(f"    - {anomaly['content'][:60]}...")
         
     def run_curses(self, stdscr):
         """Run the monitor with curses interface"""
@@ -133,6 +195,11 @@ class LiveStateMonitor:
                     if pane["has_prompt"]:
                         stdscr.addstr(row, 20, "[PROMPT]", curses.color_pair(1))
                     
+                    # Anomaly indicator
+                    if pane["anomaly_count"] > 0:
+                        stdscr.addstr(row, 30, f"[{pane['anomaly_count']} ANOMALY]", 
+                                    curses.color_pair(3) | curses.A_BLINK)
+                    
                     # Processing indicator
                     if pane["processing_indicator"]:
                         stdscr.move(row + 1, 0)
@@ -148,6 +215,16 @@ class LiveStateMonitor:
                         stdscr.addstr(row + 1, 4, f"└─ {pane['last_line'][:60]}...", 
                                     curses.color_pair(5))
                     row += 2
+                
+                # Check if anomalies detected
+                if self.anomalies_detected:
+                    # Clear and show anomaly message
+                    stdscr.clear()
+                    stdscr.addstr(0, 0, "ANOMALIES DETECTED!", curses.color_pair(3) | curses.A_BOLD)
+                    stdscr.addstr(2, 0, "Saving anomaly data and exiting...")
+                    stdscr.refresh()
+                    time.sleep(1)
+                    running = False
                 
                 # State transition history
                 if len(self.history) > 1:
@@ -196,6 +273,7 @@ class LiveStateMonitor:
     def run_simple(self, duration: int = 60, interval: float = 0.5):
         """Simple text-based monitoring"""
         print(f"Monitoring session '{self.session_name}' for {duration} seconds...")
+        print("Will auto-exit if anomalies are detected.")
         print("Press Ctrl+C to stop\n")
         
         start_time = time.time()
@@ -214,6 +292,8 @@ class LiveStateMonitor:
                     status = f"Pane {pane['index']}: {pane['state']:8}"
                     if pane["has_prompt"]:
                         status += " [PROMPT]"
+                    if pane["anomaly_count"] > 0:
+                        status += f" [ANOMALY: {pane['anomaly_count']}]"
                     print(status)
                     
                     if pane["processing_indicator"]:
@@ -221,6 +301,12 @@ class LiveStateMonitor:
                     elif pane["last_line"]:
                         print(f"  └─ {pane['last_line'][:50]}...")
                     print()
+                
+                # Check if anomalies detected
+                if self.anomalies_detected:
+                    print("\n*** ANOMALIES DETECTED! ***")
+                    print("Saving anomaly data and exiting...")
+                    break
                 
                 time.sleep(interval)
                 
@@ -244,15 +330,21 @@ def main():
     
     if args.simple:
         monitor.run_simple(args.duration, args.interval)
+        if monitor.anomalies_detected:
+            monitor.save_anomalies()
     else:
         # Run with curses
         try:
             update_count = curses.wrapper(monitor.run_curses)
             print(f"\nMonitoring completed. Total updates: {update_count}")
+            if monitor.anomalies_detected:
+                monitor.save_anomalies()
         except Exception as e:
             print(f"Error running curses interface: {e}")
             print("Falling back to simple mode...")
             monitor.run_simple(args.duration, args.interval)
+            if monitor.anomalies_detected:
+                monitor.save_anomalies()
             
 
 if __name__ == "__main__":
