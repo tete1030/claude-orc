@@ -384,7 +384,8 @@ Error: MCP error -32603: 'MessageDeliverySystem' object has no attribute 'queue_
         quit_patterns = [
             "Goodbye!",
             "Session ended.",
-            "Process terminated",
+            "[Process docker terminated]",  # Updated to match new specific pattern
+            "Process exited with status 0",  # Updated to match new specific pattern
         ]
         
         for pattern in quit_patterns:
@@ -456,6 +457,151 @@ Some previous output
         self._set_agent_as_initialized()
         state = self.monitor.detect_agent_state(content, "TestAgent")
         self.assertEqual(state, AgentState.BUSY)
+
+    def test_false_quit_detection_prevention(self):
+        """Test that vague process termination messages don't trigger QUIT state"""
+        self._set_agent_as_initialized()
+        
+        # Content with vague "Process terminated" that should NOT trigger QUIT
+        false_quit_content = """
+Previous conversation...
+Process terminated unexpectedly
+But agent recovered...
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        state = self.monitor.detect_agent_state(false_quit_content, "TestAgent")
+        self.assertEqual(state, AgentState.IDLE, "Vague 'Process terminated' should not trigger QUIT")
+        
+        # Content with specific termination that SHOULD trigger QUIT
+        real_quit_content = """
+Previous conversation...
+[Process docker terminated]
+Agent has exited
+"""
+        state = self.monitor.detect_agent_state(real_quit_content, "TestAgent")
+        self.assertEqual(state, AgentState.QUIT, "Specific termination pattern should trigger QUIT")
+
+    def test_feedback_prompt_ui_filtering(self):
+        """Test that Claude's feedback prompt UI doesn't interfere with state detection"""
+        self._set_agent_as_initialized()
+        
+        # Feedback prompt with idle state
+        feedback_idle_content = """
+Some conversation...
+
+How is Claude doing this session?
+1: Bad  2: Fine  3: Good  0: Dismiss
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        state = self.monitor.detect_agent_state(feedback_idle_content, "TestAgent")
+        self.assertEqual(state, AgentState.IDLE, "Feedback prompt should not interfere with IDLE detection")
+        
+        # Feedback confirmation with processing
+        feedback_busy_content = """
+Some conversation...
+
+✓ Thanks for helping make Claude better!
+
+✻ Processing… (2s · esc to interrupt)
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        state = self.monitor.detect_agent_state(feedback_busy_content, "TestAgent")
+        self.assertEqual(state, AgentState.BUSY, "Feedback confirmation should not interfere with BUSY detection")
+
+    def test_post_feedback_state_detection(self):
+        """Test state detection after feedback UI has appeared"""
+        self._set_agent_as_initialized()
+        
+        # Post-feedback idle state (based on snapshot 20250803_160245.txt)
+        post_feedback_content = """
+  ⎿  Message sent to Architect
+
+✓ Thanks for helping make Claude better!
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        state = self.monitor.detect_agent_state(post_feedback_content, "TestAgent")
+        self.assertEqual(state, AgentState.IDLE, "Should correctly detect IDLE after feedback confirmation")
+        
+        # Multiple feedback interactions should still work
+        multiple_feedback_content = """
+Previous conversation...
+
+How is Claude doing this session?
+1: Bad  2: Fine  3: Good  0: Dismiss
+
+✓ Thanks for helping make Claude better!
+
+More conversation...
+
+✓ Thanks for helping make Claude better!
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        state = self.monitor.detect_agent_state(multiple_feedback_content, "TestAgent")
+        self.assertEqual(state, AgentState.IDLE, "Multiple feedback interactions should not affect detection")
+
+    def test_ui_anomaly_detection_functionality(self):
+        """Test that UI anomaly detection correctly identifies unknown patterns"""
+        self._set_agent_as_initialized()
+        
+        # Content with known good patterns - should have few/no anomalies
+        normal_content = """
+✻ Processing… (2s · esc to interrupt)
+↓ 145 tokens
+esc to interrupt)
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        anomalies = self.monitor.detect_ui_anomalies(normal_content)
+        self.assertLessEqual(len(anomalies), 1, "Normal content should have minimal anomalies")
+        
+        # Content with clear anomalies - should detect them
+        anomaly_content = """
+UNKNOWN_NEW_PATTERN: This shouldn't be here
+🚨 Brand new UI element
+Unexpected line that doesn't match patterns
+
+✻ Processing… (2s · esc to interrupt)
+
+╭─────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰─────────────────────────────────────────────────────────────╯
+  ? for shortcuts                       Bypassing Permissions
+"""
+        anomalies = self.monitor.detect_ui_anomalies(anomaly_content)
+        self.assertGreaterEqual(len(anomalies), 2, "Should detect multiple anomalies in problematic content")
+        
+        # Verify anomaly structure
+        if anomalies:
+            anomaly = anomalies[0]
+            self.assertIn('line_num', anomaly)
+            self.assertIn('content', anomaly)
+            self.assertIn('context', anomaly)
+            self.assertIsInstance(anomaly['line_num'], int)
+            self.assertIsInstance(anomaly['content'], str)
+            self.assertIsInstance(anomaly['context'], list)
 
 
 if __name__ == '__main__':

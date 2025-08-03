@@ -65,7 +65,15 @@ class AgentStateMonitor:
         r"Goodbye!",
         r"Session ended",
         r"Claude exited",
-        r"Process.*terminated",
+        r"^\[Process.*terminated\]$",  # More specific - must be on its own line with brackets
+        r"^Process exited with",  # More specific - at start of line
+    ]
+    
+    FEEDBACK_UI_PATTERNS = [
+        r"How is Claude doing this session\?",  # Feedback prompt
+        r"1:\s*Bad\s+2:\s*Fine\s+3:\s*Good\s+0:\s*Dismiss",  # Feedback options
+        r"✓ Thanks for helping make Claude better!",  # Feedback confirmation
+        r"Thanks for helping make Claude better",  # Alternate confirmation
     ]
     
     INITIALIZING_PATTERNS = [
@@ -97,16 +105,38 @@ class AgentStateMonitor:
         if agent_name and agent_name in self.agent_states:
             agent_age = time.time() - self.agent_states[agent_name].initialization_time
         
-        # 1. Check for QUIT first (highest priority)
+        # Filter out feedback UI elements before processing
+        filtered_recent = recent_content
+        filtered_last_few = last_few_lines
+        for pattern in self.FEEDBACK_UI_PATTERNS:
+            filtered_recent = re.sub(pattern, '', filtered_recent, flags=re.IGNORECASE)
+            filtered_last_few = re.sub(pattern, '', filtered_last_few, flags=re.IGNORECASE)
+        
+        # 1. Check for QUIT first (highest priority) with context checking
         for pattern in self.QUIT_PATTERNS:
-            if re.search(pattern, recent_content, re.IGNORECASE):
+            match = re.search(pattern, recent_content, re.IGNORECASE | re.MULTILINE)
+            if match:
+                # Check if there's an active prompt box AFTER the quit pattern
+                match_pos = match.start()
+                after_match = recent_content[match_pos:]
+                
+                # If we see an active prompt box after, agent hasn't quit
+                if re.search(r'╭.*╮.*\n.*│.*>.*│.*\n.*╰.*╯', after_match, re.DOTALL):
+                    continue
+                    
+                # If we see processing indicators after, agent hasn't quit
+                if any(re.search(f'{word}…', after_match) for word in [
+                    'Accomplishing', 'Working', 'Processing', 'Thinking', 'Analyzing'
+                ]):
+                    continue
+                    
                 return AgentState.QUIT
         
         # 2. Check for ERROR (but not if there's a prompt after)
         for pattern in self.ERROR_PATTERNS:
-            if re.search(pattern, last_few_lines, re.IGNORECASE):
+            if re.search(pattern, filtered_last_few, re.IGNORECASE):
                 # If there's a prompt box after error, agent recovered
-                if not re.search(r'│\s*>', last_few_lines):
+                if not re.search(r'│\s*>', filtered_last_few):
                     return AgentState.ERROR
         
         # 3. Check for INITIALIZING (during first 3 seconds or if we see init patterns)
@@ -129,7 +159,7 @@ class AgentStateMonitor:
         # - Empty line
         # - Prompt box (╭─...─╮, │ > ... │, ╰─...─╯)
         
-        lines = recent_content.split('\n')
+        lines = filtered_recent.split('\n')
         
         # Find the prompt box top line (╭────────────────────────╮)
         # We need to find the LAST prompt box, as there might be welcome boxes above
@@ -162,8 +192,10 @@ class AgentStateMonitor:
                     indicator_line = -1
                     
                     for check_idx in range(max(0, prompt_box_top - 5), prompt_box_top - 1):
+                        # Strip line before checking to handle leading spaces from snapshot formatting
+                        line_to_check = lines[check_idx].strip()
                         for pattern in self.BUSY_PATTERNS:
-                            if re.search(pattern, lines[check_idx], re.IGNORECASE):
+                            if re.search(pattern, line_to_check, re.IGNORECASE):
                                 found_indicator = True
                                 indicator_line = check_idx
                                 break
@@ -228,9 +260,9 @@ class AgentStateMonitor:
                 return AgentState.WRITING if has_text else AgentState.IDLE
         
         # 6. Fallback: look for any prompt indicator
-        if '│' in last_few_lines and '>' in last_few_lines:
+        if '│' in filtered_last_few and '>' in filtered_last_few:
             # Check for text after prompt
-            prompt_match = re.search(r'│\s*>\s*(.+)', last_few_lines)
+            prompt_match = re.search(r'│\s*>\s*(.+)', filtered_last_few)
             if prompt_match and prompt_match.group(1).strip():
                 text = prompt_match.group(1).strip()
                 # TODO: Same temporary fix as above - skip Claude's suggestions
@@ -238,12 +270,76 @@ class AgentStateMonitor:
                     return AgentState.WRITING
             # Only return IDLE if we clearly see an empty prompt box
             # Otherwise return UNKNOWN
-            if re.search(r'│\s*>\s*│', last_few_lines):
+            if re.search(r'│\s*>\s*│', filtered_last_few):
                 return AgentState.IDLE
         
         # 7. If we can't determine the state clearly, return UNKNOWN
         # Don't make assumptions during initialization
         return AgentState.UNKNOWN
+    
+    def detect_ui_anomalies(self, pane_content: str) -> list:
+        """
+        Detect potential new UI elements that might affect state detection.
+        Returns list of anomalies found.
+        """
+        anomalies = []
+        lines = pane_content.split('\n')
+        
+        # Find the last prompt box
+        prompt_box_idx = -1
+        for i in range(len(lines) - 1, -1, -1):
+            line = lines[i]
+            if '╭' in line and '╮' in line and '─' in line:
+                # Verify this is an input box
+                for j in range(i + 1, min(i + 4, len(lines))):
+                    if j < len(lines) and '│' in lines[j] and '>' in lines[j]:
+                        prompt_box_idx = i
+                        break
+                if prompt_box_idx >= 0:
+                    break
+        
+        if prompt_box_idx > 0:
+            # Known good patterns
+            known_patterns = [
+                r'^[●•⎿▸▹▪▫◆◇○◉◎⬤⬥⬦⬧⬨⬩]',  # Various bullet/indicator symbols
+                r'^(✻|✽|✢|✤|✧|★|✿|❀|✸|✹|✺|✻|✼|✽|✾|✿|❀|❁|❂|❃|❄|❅|❆|❇|❈|❉|❊)',  # Processing spinners
+                r'^\s*>\s*\[MESSAGE\]',  # Message notifications
+                r'esc to interrupt',  # Processing info
+                r'\? for shortcuts',  # Standard footer
+                r'Context left until',  # Context indicator
+                r'Bypassing Permissions',  # Standard footer
+                r'tokens',  # Token count
+                r'Tool uses',  # Tool usage
+                r'ctrl\+r to expand',  # Expansion hint
+            ]
+            
+            # Check lines above prompt box for unexpected content
+            for i in range(max(0, prompt_box_idx - 15), prompt_box_idx):
+                line = lines[i].strip()
+                if not line or len(line) < 4:
+                    continue
+                
+                # Skip if it matches known good patterns
+                is_known = False
+                for pattern in known_patterns:
+                    if re.search(pattern, line):
+                        is_known = True
+                        break
+                
+                # Skip if it's a feedback UI element
+                for pattern in self.FEEDBACK_UI_PATTERNS:
+                    if re.search(pattern, line):
+                        is_known = True
+                        break
+                
+                if not is_known:
+                    anomalies.append({
+                        'line_num': i,
+                        'content': line,
+                        'context': lines[max(0, i-2):min(len(lines), i+3)]
+                    })
+        
+        return anomalies
     
     def _contains_only_bash_prompts(self, content: str) -> bool:
         """Check if content contains only bash prompts (no Claude UI)"""
@@ -281,8 +377,25 @@ class AgentStateMonitor:
         # Debug: log content length
         self.logger.debug(f"Captured {len(content)} chars from {agent_name} pane")
         
+        # Detect UI anomalies first
+        anomalies = self.detect_ui_anomalies(content)
+        if anomalies:
+            self.logger.warning(f"UI anomalies detected for {agent_name}: {len(anomalies)} anomaly(ies)")
+            # Log first few anomalies for debugging
+            for i, anomaly in enumerate(anomalies[:3]):
+                self.logger.debug(
+                    f"UI Anomaly {i+1} at line {anomaly['line_num']}: {anomaly['content'][:60]}..."
+                )
+        
         # Detect state
         state = self.detect_agent_state(content, agent_name)
+        
+        # Extra warning if state is UNKNOWN with anomalies
+        if anomalies and state == AgentState.UNKNOWN:
+            self.logger.warning(
+                f"Agent {agent_name} has UNKNOWN state with UI anomalies. "
+                "Claude UI may have changed. Review anomalies for detection updates."
+            )
         
         # Apply state stability during initialization
         current_time = time.time()
