@@ -48,11 +48,11 @@ This orchestrator enables multiple Claude agents to work together by:
    # Install claude-bg (background process manager)
    ./scripts/install-claude-bg.sh
    
-   # Install dkcc (Docker Claude Code manager)
-   ./scripts/install-dkcc.sh
+   # Install ccdk (Docker Claude Code manager)
+   ./scripts/install-ccdk.sh
    
-   # Install session-cli (team session management)
-   ./scripts/install-session-cli.sh
+   # Install ccorc (team session management)
+   ./scripts/install-ccorc.sh
    ```
 
 ## Quick Start
@@ -81,10 +81,10 @@ python examples/team_mcp_demo_enhanced.py --session-name my-project
 python examples/team_mcp_demo_enhanced.py --resume my-project
 
 # List all team sessions
-session-cli list
+ccorc list
 
 # Clean up when done
-session-cli cleanup --remove my-project
+ccorc cleanup --remove my-project
 ```
 
 See the [Session Management Guide](docs/SESSION_MANAGEMENT_GUIDE.md) for complete details on persistent team sessions.
@@ -235,13 +235,13 @@ The orchestrator includes CCBox (Claude Code Box) - a Docker environment for run
 ### Basic Usage
 ```bash
 # Build the Docker image
-dkcc build
+ccdk build
 
 # Run Claude in temporary container
-dkcc run
+ccdk run
 
 # Start persistent container
-dkcc start
+ccdk start
 ```
 
 ### Custom Volume Mounts
@@ -253,7 +253,7 @@ MOUNT_DATA="/path/to/data:/mnt/data:ro"
 MOUNT_CACHE="/home/user/.cache:/workspace/.cache:cached"
 ```
 
-See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation and [docs/DKCC_USAGE.md](docs/DKCC_USAGE.md) for dkcc command reference.
+See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation and [docs/CCDK_USAGE.md](docs/CCDK_USAGE.md) for ccdk command reference.
 
 ## Troubleshooting
 

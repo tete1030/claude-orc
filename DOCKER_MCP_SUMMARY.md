@@ -8,7 +8,7 @@ Successfully updated the orchestrator to work with Docker-based Claude instances
 ### 1. Docker Launch Command
 All Claude instances now launch using:
 ```bash
-env CLAUDE_INSTANCE=<agent-name> CLAUDE_CONTAINER_MODE=isolated dkcc run
+env CLAUDE_INSTANCE=<agent-name> CLAUDE_CONTAINER_MODE=isolated ccdk run
 ```
 
 ### 2. Shared Directory Structure

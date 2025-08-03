@@ -2,7 +2,7 @@
 
 This Docker environment (CCBox - Claude Code Box) provides a complete development environment for running Claude Code with all necessary dependencies.
 
-**Note**: The `dkcc` tool no longer uses docker-compose. All container management is done with pure Docker commands.
+**Note**: The `ccdk` tool no longer uses docker-compose. All container management is done with pure Docker commands.
 
 ## Features
 
@@ -16,18 +16,18 @@ This Docker environment (CCBox - Claude Code Box) provides a complete developmen
 - **Docker Access**: Full Docker access from within the container via socket mounting
 - **GitHub CLI**: Pre-installed for repository operations and GitHub integration
 - **claude-bg**: Background process manager pre-installed for managing long-running tasks
-- **dkcc**: Docker container manager pre-installed for Docker-in-Docker operations
+- **ccdk**: Docker container manager pre-installed for Docker-in-Docker operations
 
 ## Quick Start
 
 ### Option 1: Temporary Container (Recommended for Quick Tasks)
 ```bash
 # Run Claude Code directly in temporary container (with venv auto-sourced)
-dkcc run
+ccdk run
 # This creates a temporary container that runs: claude --dangerously-skip-permissions
 
 # Or run interactive bash shell
-dkcc run-bash
+ccdk run-bash
 
 # Or use Docker directly
 docker run --rm -it \
@@ -44,48 +44,48 @@ docker run --rm -it \
 ### Option 2: Persistent Container
 ```bash
 # Build the Docker image (only needed once)
-dkcc build
+ccdk build
 
 # Start a persistent container
-dkcc start
+ccdk start
 
 # Access the container with shell
-dkcc shell
+ccdk shell
 
 # Or run Claude directly (default for exec)
-dkcc exec
+ccdk exec
 ```
 
 ### Option 3: Multiple Named Instances
 ```bash
 # Run multiple instances for different projects
-CLAUDE_INSTANCE=project1 dkcc start
-CLAUDE_INSTANCE=project2 dkcc start
+CLAUDE_INSTANCE=project1 ccdk start
+CLAUDE_INSTANCE=project2 ccdk start
 
 # Access specific instance
-CLAUDE_INSTANCE=project1 dkcc shell
+CLAUDE_INSTANCE=project1 ccdk shell
 
 # List all instances
-dkcc list
+ccdk list
 ```
 
 ### Option 4: Containers with Random Suffix
 ```bash
 # Create container with random 8-character suffix
-dkcc --random start
+ccdk --random start
 # Creates: ccbox-a1b2c3d4
 
 # Named instance with random suffix
-CLAUDE_INSTANCE=dev dkcc --random start
+CLAUDE_INSTANCE=dev ccdk --random start
 # Creates: ccbox-dev-x9y8z7w6
 
 # Always use random suffix via environment variable
 export CLAUDE_INSTANCE_RANDOM=true
-dkcc start
+ccdk start
 # Creates: ccbox-m3n4o5p6
 
 # Use with specific instance name
-CLAUDE_INSTANCE=test CLAUDE_INSTANCE_RANDOM=true dkcc start
+CLAUDE_INSTANCE=test CLAUDE_INSTANCE_RANDOM=true ccdk start
 # Creates: ccbox-test-q1r2s3t4
 ```
 
@@ -164,7 +164,7 @@ To set any Claude Code environment variable, export it before running the contai
 export ANTHROPIC_API_KEY=your-key-here
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
 export DISABLE_TELEMETRY=true
-dkcc run
+ccdk run
 ```
 
 For persistent settings, add them to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.)
@@ -209,37 +209,37 @@ npm run dev
 
 ### Check Container Status
 ```bash
-dkcc status
+ccdk status
 ```
 
 ### View Logs
 ```bash
-dkcc logs
+ccdk logs
 ```
 
 ### Execute Command Without Shell
 ```bash
 # Run Claude Code (default when no command specified)
-dkcc exec
+ccdk exec
 
 # Or run specific commands
-dkcc exec python --version
-dkcc exec npm --version
+ccdk exec python --version
+ccdk exec npm --version
 ```
 
 ### Restart Container
 ```bash
-dkcc restart
+ccdk restart
 ```
 
 ### Stop Container
 ```bash
-dkcc stop
+ccdk stop
 ```
 
 ### Clean Up (WARNING: Removes volumes)
 ```bash
-dkcc clean
+ccdk clean
 ```
 
 ## Troubleshooting
@@ -273,7 +273,7 @@ To add your Anthropic API key:
 ```bash
 # Export before running container
 export ANTHROPIC_API_KEY=your-key-here
-dkcc run
+ccdk run
 
 # Or add to your shell profile for persistence
 echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc
@@ -295,7 +295,7 @@ MOUNT_CACHE="/home/$USER/.mycache:/workspace/.cache:cached"
 EOF
 
 # Run container - mounts are automatically applied
-dkcc run
+ccdk run
 
 # Inside container, access your mounted data
 ls /mnt/data/
@@ -325,14 +325,14 @@ claude-bg logs my-job_20250731_120000
 claude-bg stop my-job_20250731_120000
 ```
 
-### dkcc (Docker Claude Code Manager)
-dkcc is pre-installed for managing nested Docker containers:
+### ccdk (Docker Claude Code Manager)
+ccdk is pre-installed for managing nested Docker containers:
 ```bash
 # Inside container (Docker-in-Docker)
-dkcc build        # Build another CCBox image
-dkcc run          # Run nested container
-dkcc start        # Start nested persistent container
-dkcc exec bash    # Execute in nested container
+ccdk build        # Build another CCBox image
+ccdk run          # Run nested container
+ccdk start        # Start nested persistent container
+ccdk exec bash    # Execute in nested container
 ```
 
 Note: Use with caution when nesting containers.

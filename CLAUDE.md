@@ -42,7 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Session Persistence**: Team sessions survive container restarts and system reboots
 - **Enterprise Docker Support**: Full containerization with isolation and shared communication channels  
 - **Background Process Management**: Production-grade process management with `claude-bg`
-- **Comprehensive Tooling**: Complete CLI toolchain (`dkcc` for Docker, `session-cli` for team sessions, diagnostic scripts, monitoring tools)
+- **Comprehensive Tooling**: Complete CLI toolchain (`ccdk` for Docker, `ccorc` for team sessions, diagnostic scripts, monitoring tools)
 - **Modern Python Stack**: Migrated to Poetry for dependency management and packaging
 
 ### 🎯 Deployment-Ready Components
@@ -65,7 +65,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 🔧 Recent Modernization Achievements
 - **Poetry Migration**: Modern Python packaging and dependency management
 - **Enhanced Docker Integration**: Improved containerization with advanced CLI tooling
-- **Session Persistence System**: Container-based team session persistence without modifying dkcc
+- **Session Persistence System**: Container-based team session persistence without modifying ccdk
 - **Expanded Monitoring**: Comprehensive diagnostic and monitoring capabilities
 - **Production Toolchain**: Complete set of production-ready utilities and scripts
 
@@ -92,10 +92,10 @@ orchestrator/
 ├── examples/                 # Example orchestrator configurations
 ├── bin/                      # Executable scripts
 │   ├── claude-bg             # Background process manager
-│   └── dkcc                  # Docker management script
+│   └── ccdk                  # Docker management script
 ├── scripts/                  # Utility scripts
 │   ├── install-claude-bg.sh  # Install claude-bg to PATH
-│   ├── install-dkcc.sh       # Install dkcc to PATH
+│   ├── install-ccdk.sh       # Install ccdk to PATH
 │   ├── diagnose_agent_states.py  # Agent state diagnostic tool
 │   └── monitor_live_states.py    # Live state monitoring tool
 ├── src/                      # Main source code
@@ -358,62 +358,62 @@ python scripts/diagnose_agent_states.py <session-name> --single
 # Saves to .temp/state_snapshot_TIMESTAMP.txt
 ```
 
-### Session Management (session-cli)
+### Session Management (ccorc)
 
 #### Installation:
 ```bash
-# Install session-cli to your PATH
-./scripts/install-session-cli.sh
+# Install ccorc to your PATH
+./scripts/install-ccorc.sh
 ```
 
 #### Usage:
 ```bash
 # List all team sessions
-session-cli list
+ccorc list
 
 # Check team session health
-session-cli health my-project
+ccorc health my-project
 
 # Clean up team sessions
-session-cli cleanup --interactive
-session-cli cleanup --remove my-project
+ccorc cleanup --interactive
+ccorc cleanup --remove my-project
 
 # Export team session metadata
-session-cli export my-project --output ./backup/
+ccorc export my-project --output ./backup/
 ```
 
-### Docker Management (dkcc)
+### Docker Management (ccdk)
 
 #### Installation:
 ```bash
-# Install dkcc to your PATH
-./scripts/install-dkcc.sh
+# Install ccdk to your PATH
+./scripts/install-ccdk.sh
 ```
 
 #### Usage:
 ```bash
 # Build image
-dkcc build
+ccdk build
 
 # Run Claude with options
-dkcc run -i dev -m sonnet
-dkcc run --isolated
+ccdk run -i dev -m sonnet
+ccdk run --isolated
 
 # Start persistent container
-dkcc start -i frontend
+ccdk start -i frontend
 
 # Run Claude in existing container
-dkcc cc -i frontend
-dkcc cc -i frontend --help
+ccdk cc -i frontend
+ccdk cc -i frontend --help
 
 # Open shell
-dkcc shell -i frontend
-dkcc shell -i frontend python app.py
+ccdk shell -i frontend
+ccdk shell -i frontend python app.py
 
 # Other commands
-dkcc stop -i frontend    # Stop container
-dkcc logs -i frontend    # View logs
-dkcc list                # List all containers
+ccdk stop -i frontend    # Stop container
+ccdk logs -i frontend    # View logs
+ccdk list                # List all containers
 ```
 
 ## Production Deployment Best Practices
@@ -422,7 +422,7 @@ dkcc list                # List all containers
 ```bash
 # 1. Install system dependencies
 ./scripts/install-claude-bg.sh    # Background process manager
-./scripts/install-dkcc.sh         # Docker management CLI
+./scripts/install-ccdk.sh         # Docker management CLI
 
 # 2. Set up Python environment with Poetry
 poetry install --no-dev           # Production dependencies only
@@ -450,12 +450,12 @@ claude-bg logs production-orchestrator_[timestamp]
 #### Docker-Based Deployment
 ```bash
 # Build production image
-dkcc build
+ccdk build
 
 # Deploy isolated agents
-dkcc start -i leader
-dkcc start -i researcher  
-dkcc start -i writer
+ccdk start -i leader
+ccdk start -i researcher  
+ccdk start -i writer
 
 # Run orchestrator connecting to containerized agents
 python examples/team_mcp_demo_enhanced.py

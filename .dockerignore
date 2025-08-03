@@ -4,7 +4,7 @@
 # Only include the files we need
 !bin/
 !bin/claude-bg
-!bin/dkcc
+!bin/ccdk
 !docker/
 !docker/claude-code/
 !docker/claude-code/entrypoint.sh

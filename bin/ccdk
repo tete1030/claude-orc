@@ -317,7 +317,7 @@ start_container() {
         print_error "Docker image 'ccbox:latest' not found"
         print_error "Please build the image first by running:"
         print_error "  1. Clone the orchestrator repository"
-        print_error "  2. Run: ./bin/dkcc build"
+        print_error "  2. Run: ./bin/ccdk build"
         exit 1
     fi
     
@@ -438,7 +438,7 @@ run_temporary() {
         print_error "Docker image 'ccbox:latest' not found"
         print_error "Please build the image first by running:"
         print_error "  1. Clone the orchestrator repository"
-        print_error "  2. Run: ./bin/dkcc build"
+        print_error "  2. Run: ./bin/ccdk build"
         exit 1
     fi
     
@@ -477,7 +477,7 @@ run_shell() {
         print_error "Docker image 'ccbox:latest' not found"
         print_error "Please build the image first by running:"
         print_error "  1. Clone the orchestrator repository"
-        print_error "  2. Run: ./bin/dkcc build"
+        print_error "  2. Run: ./bin/ccdk build"
         exit 1
     fi
     

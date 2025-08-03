@@ -185,9 +185,9 @@ RUN npm install -g @anthropic-ai/claude-code
 COPY bin/claude-bg /usr/local/bin/claude-bg
 RUN chmod +x /usr/local/bin/claude-bg
 
-# Copy dkcc for Docker container management
-COPY bin/dkcc /usr/local/bin/dkcc
-RUN chmod +x /usr/local/bin/dkcc
+# Copy ccdk for Docker container management
+COPY bin/ccdk /usr/local/bin/ccdk
+RUN chmod +x /usr/local/bin/ccdk
 
 # Copy entrypoint script
 # Copy container scripts

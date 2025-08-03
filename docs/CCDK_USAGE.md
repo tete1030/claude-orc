@@ -1,30 +1,30 @@
-# dkcc - Docker Claude Code Manager
+# ccdk - Docker Claude Code Manager
 
-`dkcc` is a command-line tool for managing Claude Code Docker containers (CCBox - Claude Code Box).
+`ccdk` is a command-line tool for managing Claude Code Docker containers (CCBox - Claude Code Box).
 
 ## Installation
 
 ```bash
 # From the orchestrator directory
-./scripts/install-dkcc.sh
+./scripts/install-ccdk.sh
 ```
 
-This installs `dkcc` to:
-- `/usr/local/bin/dkcc` (if run as root)
-- `~/.local/bin/dkcc` (if run as regular user)
+This installs `ccdk` to:
+- `/usr/local/bin/ccdk` (if run as root)
+- `~/.local/bin/ccdk` (if run as regular user)
 
 Make sure `~/.local/bin` is in your PATH if installing as a regular user.
 
 ## Important: Building the Image
 
-The `dkcc build` command must be run from the orchestrator repository directory where the Dockerfile exists. After installation, the build command will only work when executed from the source repository.
+The `ccdk build` command must be run from the orchestrator repository directory where the Dockerfile exists. After installation, the build command will only work when executed from the source repository.
 
 ```bash
 # From the orchestrator repository
-./bin/dkcc build
+./bin/ccdk build
 
 # Or if installed globally, from the orchestrator directory
-dkcc build
+ccdk build
 ```
 
 Once built, all other commands can be run from any directory.
@@ -35,7 +35,7 @@ Once built, all other commands can be run from any directory.
 
 ```bash
 # Build the CCBox image
-dkcc build
+ccdk build
 ```
 
 ### Running Containers
@@ -43,46 +43,46 @@ dkcc build
 #### Temporary Container (Recommended for quick tasks)
 ```bash
 # Run Claude Code in a temporary container
-dkcc run
+ccdk run
 
 # Run with interactive shell instead of Claude
-dkcc run-shell
+ccdk run-shell
 ```
 
 #### Persistent Container (For long-running work)
 ```bash
 # Start a persistent container
-dkcc start
+ccdk start
 
 # Check container status
-dkcc status
+ccdk status
 
 # Stop the container
-dkcc stop
+ccdk stop
 
 # Restart the container
-dkcc restart
+ccdk restart
 
 # Remove the container
-dkcc rm
+ccdk rm
 ```
 
 ### Working with Running Containers
 
 ```bash
 # View container logs
-dkcc logs
+ccdk logs
 
 # Run Claude Code in existing container
-dkcc cc                  # Start Claude
-dkcc cc --help          # Pass arguments to Claude
+ccdk cc                  # Start Claude
+ccdk cc --help          # Pass arguments to Claude
 
 # Open bash shell in container
-dkcc shell
+ccdk shell
 
 # Execute other commands in container
-dkcc shell ls -la        # Run commands via shell
-dkcc shell python app.py # Run Python scripts
+ccdk shell ls -la        # Run commands via shell
+ccdk shell python app.py # Run Python scripts
 ```
 
 ## Advanced Usage
@@ -93,19 +93,19 @@ Use convenient options instead of environment variables:
 
 ```bash
 # Set instance name
-dkcc run -i dev
-dkcc start -i frontend
+ccdk run -i dev
+ccdk start -i frontend
 
 # Set model
-dkcc run -m sonnet
-dkcc run -m opus  # Pass model name directly
+ccdk run -m sonnet
+ccdk run -m opus  # Pass model name directly
 
 # Set container mode
-dkcc run --isolated   # Isolated container mode
-dkcc run --shared     # Shared container mode
+ccdk run --isolated   # Isolated container mode
+ccdk run --shared     # Shared container mode
 
 # Combine options
-dkcc run -i dev -m sonnet --isolated
+ccdk run -i dev -m sonnet --isolated
 ```
 
 ### Multiple Instances
@@ -114,18 +114,18 @@ You can run multiple Claude Code containers:
 
 ```bash
 # Using options
-dkcc start -i dev
-dkcc start -i test
-dkcc start -i prod
+ccdk start -i dev
+ccdk start -i test
+ccdk start -i prod
 
 # Work with specific instance
-dkcc cc -i dev
-dkcc logs -i test
-dkcc stop -i prod
+ccdk cc -i dev
+ccdk logs -i test
+ccdk stop -i prod
 
 # Using environment variables (legacy)
-CLAUDE_INSTANCE=dev dkcc start
-CLAUDE_INSTANCE=test dkcc logs
+CLAUDE_INSTANCE=dev ccdk start
+CLAUDE_INSTANCE=test ccdk logs
 ```
 
 ### Custom Volume Mounts
@@ -166,39 +166,39 @@ MOUNT_MODELS="/path/to/models:/models:ro"
 ## Troubleshooting
 
 ### Build command not found
-If you get "Dockerfile not found" error when running `dkcc build`:
+If you get "Dockerfile not found" error when running `ccdk build`:
 - The build command must be run from the orchestrator repository directory
 - Ensure you're in the directory containing `docker/claude-code/Dockerfile`
-- After installation, `dkcc` cannot build from other directories
+- After installation, `ccdk` cannot build from other directories
 
 ### Container won't start
 ```bash
 # Check if container already exists
-dkcc status
+ccdk status
 
 # Check if image exists
 docker images | grep ccbox
 
 # If image missing, build from orchestrator repo
 cd /path/to/orchestrator
-dkcc build
+ccdk build
 
 # Then start from anywhere
-dkcc start
+ccdk start
 ```
 
 ### Permission issues
 ```bash
 # Container runs as your user ID/GID
 # Check current user
-dkcc exec whoami
-dkcc exec id
+ccdk exec whoami
+ccdk exec id
 ```
 
-### Can't find dkcc after installation
+### Can't find ccdk after installation
 ```bash
 # Check installation location
-which dkcc
+which ccdk
 
 # Add to PATH if needed
 export PATH="$HOME/.local/bin:$PATH"
@@ -217,19 +217,19 @@ docker ps  # Should work without sudo
 
 | Command | Description |
 |---------|-------------|
-| `dkcc build` | Build the Docker image |
-| `dkcc run` | Run Claude in temporary container |
-| `dkcc run-shell` | Run shell in temporary container |
-| `dkcc start` | Start persistent container |
-| `dkcc stop` | Stop running container |
-| `dkcc restart` | Restart container |
-| `dkcc clean` | Remove container and volumes |
-| `dkcc status` | Show container status |
-| `dkcc logs` | View container logs |
-| `dkcc cc [args]` | Run Claude Code in container |
-| `dkcc shell [cmd]` | Open shell or execute command |
-| `dkcc list` | List all Claude Code containers |
-| `dkcc --help` | Show help message |
+| `ccdk build` | Build the Docker image |
+| `ccdk run` | Run Claude in temporary container |
+| `ccdk run-shell` | Run shell in temporary container |
+| `ccdk start` | Start persistent container |
+| `ccdk stop` | Stop running container |
+| `ccdk restart` | Restart container |
+| `ccdk clean` | Remove container and volumes |
+| `ccdk status` | Show container status |
+| `ccdk logs` | View container logs |
+| `ccdk cc [args]` | Run Claude Code in container |
+| `ccdk shell [cmd]` | Open shell or execute command |
+| `ccdk list` | List all Claude Code containers |
+| `ccdk --help` | Show help message |
 
 ### Options
 

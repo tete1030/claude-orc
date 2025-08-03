@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install session-cli to user's PATH
+# Install ccorc to user's PATH
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -9,12 +9,12 @@ INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
 
 # Create wrapper script
-cat > "$INSTALL_DIR/session-cli" << EOL
+cat > "$INSTALL_DIR/ccorc" << EOL
 #!/bin/bash
-exec python3 "$REPO_ROOT/bin/session-cli" "\$@"
+exec python3 "$REPO_ROOT/bin/ccorc" "\$@"
 EOL
 
-chmod +x "$INSTALL_DIR/session-cli"
+chmod +x "$INSTALL_DIR/ccorc"
 
-echo "✓ Installed session-cli to $INSTALL_DIR"
+echo "✓ Installed ccorc to $INSTALL_DIR"
 echo "Make sure $INSTALL_DIR is in your PATH"

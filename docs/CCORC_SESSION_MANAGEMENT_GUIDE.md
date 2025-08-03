@@ -1,4 +1,4 @@
-# Session Management Guide
+# CCORC Session Management Guide
 
 ## Overview
 
@@ -14,13 +14,13 @@ The Claude Multi-Agent Orchestrator supports persistent **team sessions** that s
 ## Team Sessions vs Individual Containers
 
 ### Team Sessions
-- **Managed by**: `session-cli` and orchestrator `--session-name/--resume` flags
+- **Managed by**: `ccorc` and orchestrator `--session-name/--resume` flags
 - **Scope**: Complete team setups (leader, researcher, writer agents)
 - **Purpose**: Orchestrated multi-agent work sessions
 - **Lifecycle**: Created/resumed as coordinated units
 
 ### Individual Containers  
-- **Managed by**: `dkcc` commands
+- **Managed by**: `ccdk` commands
 - **Scope**: Single Claude Code instances
 - **Purpose**: Standalone development work
 - **Lifecycle**: Independent container management
@@ -28,12 +28,12 @@ The Claude Multi-Agent Orchestrator supports persistent **team sessions** that s
 **Example Distinction**:
 ```bash
 # Team session management (coordinates multiple agents)
-session-cli list                    # Shows team sessions only
+ccorc list                    # Shows team sessions only
 python examples/team_mcp_demo_enhanced.py --session-name project-alpha
 
 # Individual container management (single agents)
-dkcc list                          # Shows all containers
-dkcc start -i my-dev-container     # Single container
+ccdk list                          # Shows all containers
+ccdk start -i my-dev-container     # Single container
 ```
 
 ## Quick Start
@@ -63,10 +63,10 @@ python examples/team_mcp_demo_enhanced.py --resume my-project
 ### Listing Available Team Sessions
 ```bash
 # Show all registered team sessions
-session-cli list
+ccorc list
 
 # Show detailed information
-session-cli list --verbose
+ccorc list --verbose
 
 # Output shows:
 # - Team session names and creation dates
@@ -75,7 +75,7 @@ session-cli list --verbose
 # - Total and running container counts
 ```
 
-**Note**: `session-cli list` shows only orchestrated team sessions. To see all containers (including individual ones), use `dkcc list`.
+**Note**: `ccorc list` shows only orchestrated team sessions. To see all containers (including individual ones), use `ccdk list`.
 
 ## Container Lifecycle and Persistence
 
@@ -113,10 +113,10 @@ python examples/team_mcp_demo_enhanced.py --resume data-analysis
 **Solution**: 
 ```bash
 # Check if team session exists
-session-cli list
+ccorc list
 
 # If session exists but containers are missing:
-session-cli cleanup --fix-broken
+ccorc cleanup --fix-broken
 ```
 
 ### Team Containers Not Starting
@@ -124,12 +124,12 @@ session-cli cleanup --fix-broken
 **Solution**:
 ```bash
 # Check team container status
-session-cli list --verbose
+ccorc list --verbose
 
 # Manually start team containers
-dkcc start -i my-project-leader
-dkcc start -i my-project-researcher  
-dkcc start -i my-project-writer
+ccdk start -i my-project-leader
+ccdk start -i my-project-researcher  
+ccdk start -i my-project-writer
 
 # Then resume team session
 python examples/team_mcp_demo_enhanced.py --resume my-project
@@ -154,13 +154,13 @@ python examples/team_mcp_demo_enhanced.py --session-name my-project --force
 **Solution**:
 ```bash
 # List all team sessions and their container counts
-session-cli list --verbose
+ccorc list --verbose
 
 # Clean up old unused team sessions
-session-cli cleanup --interactive
+ccorc cleanup --interactive
 
 # Remove specific team session completely
-session-cli cleanup --remove my-old-project
+ccorc cleanup --remove my-old-project
 ```
 
 ## Best Practices for Long-Running Team Sessions
@@ -178,10 +178,10 @@ session-cli cleanup --remove my-old-project
 ### Backup Important Work
 ```bash
 # Export team session information and metadata
-session-cli export my-project --output ./backups/
+ccorc export my-project --output ./backups/
 
 # Monitor team session health before major changes  
-session-cli health my-project
+ccorc health my-project
 ```
 
 ### Development Workflow
@@ -199,7 +199,7 @@ python examples/team_mcp_demo_enhanced.py --session-name feature-auth
 python examples/team_mcp_demo_enhanced.py --resume feature-auth
 
 # 5. Clean up when feature is complete
-session-cli cleanup --remove feature-auth
+ccorc cleanup --remove feature-auth
 ```
 
 ### Team Collaboration
@@ -221,40 +221,40 @@ python examples/team_mcp_demo_enhanced.py \
 ### Team Session Monitoring
 ```bash
 # Monitor team session health
-session-cli health my-project
+ccorc health my-project
 
 # List all team sessions with detailed status
-session-cli list --verbose
+ccorc list --verbose
 ```
 
 ### Bulk Team Session Operations
 ```bash
 # Clean up multiple team sessions interactively
-session-cli cleanup --interactive
+ccorc cleanup --interactive
 
 # Remove team sessions by pattern
-session-cli cleanup --pattern "feature-*"
+ccorc cleanup --pattern "feature-*"
 
 # Remove all stopped team sessions
-session-cli cleanup --stopped-only
+ccorc cleanup --stopped-only
 ```
 
 ## Integration with Existing Tools
 
-### With dkcc (Individual Container Management)
+### With ccdk (Individual Container Management)
 Team session management works alongside individual container management:
 ```bash
 # View team containers created by sessions
-dkcc list | grep my-project
+ccdk list | grep my-project
 
 # Access individual agent containers directly
-dkcc shell -i my-project-leader
+ccdk shell -i my-project-leader
 
 # Check logs for specific team agent
-dkcc logs -i my-project-researcher
+ccdk logs -i my-project-researcher
 
 # Create individual containers (not part of team sessions)
-dkcc run -i standalone-dev
+ccdk run -i standalone-dev
 ```
 
 ### With tmux
@@ -284,16 +284,16 @@ claude-bg start 'python examples/team_mcp_demo_enhanced.py --resume bg-task' ses
 
 ```bash
 # List all team sessions (NOT individual containers)
-session-cli list [--verbose]
+ccorc list [--verbose]
 
 # Check team session health  
-session-cli health <session-name>
+ccorc health <session-name>
 
 # Export team session metadata
-session-cli export <session-name> [--output <path>]
+ccorc export <session-name> [--output <path>]
 
 # Clean up team sessions
-session-cli cleanup [options]
+ccorc cleanup [options]
   --interactive          # Interactive team session selection
   --remove <name>        # Remove specific team session
   --pattern <pattern>    # Remove team sessions matching pattern
@@ -301,14 +301,14 @@ session-cli cleanup [options]
   --fix-broken          # Fix team sessions with missing containers
 ```
 
-### Key Differences from dkcc
+### Key Differences from ccdk
 
 | Command | Scope | Purpose |
 |---------|-------|---------|
-| `session-cli list` | Team sessions only | Show orchestrated multi-agent sessions |
-| `dkcc list` | All containers | Show individual containers (team + standalone) |
-| `session-cli cleanup` | Team sessions | Remove coordinated agent groups |
-| `dkcc stop/start` | Individual containers | Manage single containers |
+| `ccorc list` | Team sessions only | Show orchestrated multi-agent sessions |
+| `ccdk list` | All containers | Show individual containers (team + standalone) |
+| `ccorc cleanup` | Team sessions | Remove coordinated agent groups |
+| `ccdk stop/start` | Individual containers | Manage single containers |
 
 ### Integration with Core Components
 
@@ -321,6 +321,6 @@ session-cli cleanup [options]
 
 For more detailed information, see:
 - `src/session_manager.py` - Core team session management implementation
-- `bin/session-cli` - Command-line interface source
+- `bin/ccorc` - Command-line interface source
 - `tests/unit/test_session_persistence.py` - Test suite and examples
 - `examples/` - Example team session configurations

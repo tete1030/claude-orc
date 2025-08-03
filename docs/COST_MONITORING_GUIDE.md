@@ -39,7 +39,7 @@ Host Filesystem                    Container (Isolated Mode)
 
 ### Prerequisites
 - Claude Multi-Agent Orchestrator installed
-- `dkcc` Docker management tool installed
+- `ccdk` Docker management tool installed
 - Cost monitoring tool that can read Claude session files
 
 ### Configuration
@@ -47,7 +47,7 @@ Host Filesystem                    Container (Isolated Mode)
 #### For Shared Mode (Simplest)
 ```bash
 # Start agents in shared mode
-dkcc run --shared-mode
+ccdk run --shared-mode
 
 # Session files immediately available at:
 ls ~/.claude/projects/*/
@@ -56,7 +56,7 @@ ls ~/.claude/projects/*/
 #### For Isolated Mode (Default)
 ```bash
 # Start agents normally (isolated mode default)
-dkcc run -i my-agent
+ccdk run -i my-agent
 
 # Session files available at:
 ls ~/.claude/projects/cont-my-agent-*/
@@ -140,7 +140,7 @@ When using persistent team sessions, costs can be tracked per project:
 
 ```bash
 # Monitor specific team session costs
-session-cli list --verbose  # See active sessions
+ccorc list --verbose  # See active sessions
 
 # Track costs for specific project
 tail -f ~/.claude/projects/cont-my-project-*/session.jsonl
@@ -171,7 +171,7 @@ tail -f ~/.claude/projects/cont-my-project-*/session.jsonl
 #### Performance Monitoring
 ```bash
 # Check daemon process in container
-dkcc exec -i my-agent ps aux | grep session_monitor
+ccdk exec -i my-agent ps aux | grep session_monitor
 
 # Verify symlink creation
 ls -la ~/.claude/projects/cont-*/
@@ -192,31 +192,31 @@ ls -la ~/.claude/projects/cont-*/
 ### Session Files Not Appearing
 ```bash
 # Check container mode
-dkcc list  # Verify if running in shared or isolated mode
+ccdk list  # Verify if running in shared or isolated mode
 
 # For isolated mode, check daemon
-dkcc logs -i my-agent | grep session_monitor
+ccdk logs -i my-agent | grep session_monitor
 
 # Verify container filesystem
-dkcc shell -i my-agent ls -la ~/.claude/projects/
+ccdk shell -i my-agent ls -la ~/.claude/projects/
 ```
 
 ### Missing Symlinks in Isolated Mode
 ```bash
 # Check daemon is running
-dkcc exec -i my-agent pgrep -f session_monitor
+ccdk exec -i my-agent pgrep -f session_monitor
 
 # Restart container to restart daemon
-dkcc restart -i my-agent
+ccdk restart -i my-agent
 
 # Manual daemon check
-dkcc shell -i my-agent cat /var/log/session_monitor.log
+ccdk shell -i my-agent cat /var/log/session_monitor.log
 ```
 
 ### Cost Data Inconsistencies
 ```bash
 # Compare container vs host session files
-dkcc exec -i my-agent ls ~/.claude/projects/*/
+ccdk exec -i my-agent ls ~/.claude/projects/*/
 ls ~/.claude/projects/cont-my-agent-*/
 
 # Check for stale symlinks
@@ -288,5 +288,5 @@ fi
 
 For more information, see:
 - `docs/SESSION_MANAGEMENT_GUIDE.md` - Team session management
-- `docs/DKCC_USAGE.md` - Docker container management
+- `docs/CCDK_USAGE.md` - Docker container management
 - `src/session_manager.py` - Session persistence implementation

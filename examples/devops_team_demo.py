@@ -50,7 +50,7 @@ Current codebase context:
 - Main orchestrator code is in src/
 - We use tmux for UI management
 - MCP protocol for inter-agent communication
-- Docker support via dkcc tool
+- Docker support via ccdk tool
 - Enhanced state monitoring for agent states
 
 IMPORTANT RULES:
@@ -130,7 +130,7 @@ MCP tools available (ONLY use these - do not explore the filesystem):
 - check_messages: Read your inbox
 
 Your role:
-1. Manage Docker configurations and dkcc tool
+1. Manage Docker configurations and ccdk tool
 2. Monitor system performance
 3. Handle deployment automation
 4. Optimize resource usage
