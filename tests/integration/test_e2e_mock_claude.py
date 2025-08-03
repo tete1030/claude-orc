@@ -127,7 +127,7 @@ class TestE2EMockClaude(unittest.TestCase):
         self.mock_claudes = {}
         
         def capture_claude_launch(pane_index, agent_name, agent_prompt, 
-                                working_dir=None, claude_bin=None, mcp_config=None):
+                                working_dir=None, mcp_config=None):
             # Generate a session ID for this agent
             session_id = f"test-session-{agent_name}"
             

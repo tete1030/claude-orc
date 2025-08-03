@@ -326,10 +326,10 @@ team:
 agents:
   - name: "Lead"           # Coordinator role
     role: "Team Lead"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
   - name: "Specialist"     # Domain expert
     role: "Domain Expert"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
 
 settings:
   orchestrator_type: "enhanced"  # Always use enhanced for production

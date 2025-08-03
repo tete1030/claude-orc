@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from src.team_context_manager import TeamContextManager, AgentInfo, TeamContext
+from src.team_context_manager import TeamContextManager, TeamContextAgentInfo, TeamContext
 
 # Mock imports for components not yet implemented
 class MockTeamContextManager:
@@ -113,9 +113,9 @@ class TestSessionPersistence(unittest.TestCase):
     
     def test_basic_session_creation(self):
         """Test basic context creation"""
-        # Create AgentInfo objects for real TeamContextManager
+        # Create TeamContextAgentInfo objects for real TeamContextManager
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
+            TeamContextAgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
         
@@ -143,7 +143,7 @@ class TestSessionPersistence(unittest.TestCase):
         """Test resuming an existing session"""
         # Create initial session
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
+            TeamContextAgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
         self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")
@@ -173,10 +173,10 @@ class TestSessionPersistence(unittest.TestCase):
         self.assertEqual(len(contexts), 0)
         
         # Create multiple contexts
-        agents1 = [AgentInfo(name="agent1", container="session-1-agent1")]
+        agents1 = [TeamContextAgentInfo(name="agent1", container="session-1-agent1")]
         agents2 = [
-            AgentInfo(name="agent2", container="session-2-agent2"),
-            AgentInfo(name="agent3", container="session-2-agent3")
+            TeamContextAgentInfo(name="agent2", container="session-2-agent2"),
+            TeamContextAgentInfo(name="agent3", container="session-2-agent3")
         ]
         session1 = self.team_context_manager.create_context("session-1", agents1, "session-1-tmux")
         session2 = self.team_context_manager.create_context("session-2", agents2, "session-2-tmux")
@@ -190,7 +190,7 @@ class TestSessionPersistence(unittest.TestCase):
         """Test cleaning up context resources"""
         # Create session
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
+            TeamContextAgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
         self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")
@@ -216,7 +216,7 @@ class TestSessionPersistence(unittest.TestCase):
         """Test that registry persists across manager instances"""
         # Create context with first manager
         agents = [
-            AgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
+            TeamContextAgentInfo(name=agent, container=f"{self.test_context_name}-{agent}")
             for agent in self.test_agents
         ]
         session1 = self.team_context_manager.create_context(self.test_context_name, agents, f"{self.test_context_name}-tmux")

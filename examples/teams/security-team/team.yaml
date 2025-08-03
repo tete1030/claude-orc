@@ -5,23 +5,23 @@ team:
 agents:
   - name: "Security Architect"
     role: "Security Architecture and Policy Lead"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "Security Analyst"
     role: "Threat Analysis and Security Assessment"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "Developer"
     role: "Secure Development and Implementation"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "QA"
     role: "Security Testing and Validation"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
 
 settings:
-  default_session_name: "security-team"
-  default_model: "claude-3.5-sonnet"
+  default_context_name: "security-team"
+  default_model: "sonnet"
   orchestrator_type: "enhanced"
   poll_interval: 0.3
   mcp_port: 8767

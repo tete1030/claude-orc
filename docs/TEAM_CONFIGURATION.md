@@ -29,12 +29,12 @@ team:
 agents:
   - name: "Agent Name"
     role: "Agent Role Description"
-    model: "claude-3.5-sonnet"  # Optional, uses team default if not specified
+    model: "sonnet"  # Optional, uses team default if not specified
     # prompt_file: "agent_name.md"  # Optional, defaults to name-based file
 
 settings:
-  default_session_name: "team-session"
-  default_model: "claude-3.5-sonnet"
+  default_context_name: "team-session"
+  default_model: "sonnet"
   orchestrator_type: "enhanced"  # "base" or "enhanced"
   poll_interval: 0.5
   mcp_port: 8766
@@ -64,17 +64,17 @@ workflow:
     {
       "name": "Architect",
       "role": "System Design Lead",
-      "model": "claude-3.5-sonnet"
+      "model": "sonnet"
     },
     {
       "name": "Developer", 
       "role": "Implementation Engineer",
-      "model": "claude-3.5-sonnet"
+      "model": "sonnet"
     }
   ],
   "settings": {
-    "default_session_name": "dev-team",
-    "default_model": "claude-3.5-sonnet",
+    "default_context_name": "dev-team",
+    "default_model": "sonnet",
     "orchestrator_type": "enhanced"
   }
 }
@@ -118,12 +118,12 @@ ccorc launch --team devops-team --session my-session
 
 **Global Model Override:**
 ```bash
-ccorc launch --team devops-team --model claude-3.5-haiku
+ccorc launch --team devops-team --model opus
 ```
 
 **Agent-Specific Model Overrides:**
 ```bash
-ccorc launch --team devops-team --agent-model "Architect=claude-3.5-sonnet" --agent-model "Developer=claude-3.5-haiku"
+ccorc launch --team devops-team --agent-model "Architect=opus" --agent-model "Developer=sonnet"
 ```
 
 **Force Kill Existing Session:**
@@ -138,7 +138,7 @@ ccorc launch --team devops-team --debug
 
 **Combined Options:**
 ```bash
-ccorc launch --team devops-team --session custom-session --model claude-3.5-sonnet --debug --force
+ccorc launch --team devops-team --session custom-session --model sonnet --debug --force
 ```
 
 ### Team Context Management
@@ -204,8 +204,8 @@ teams/
 
 | Setting | Description | Default | Options |
 |---------|-------------|---------|---------|
-| `default_session_name` | Session name if not overridden | "team-session" | Any string |
-| `default_model` | Default model for all agents | "claude-3.5-sonnet" | Valid Claude model names |
+| `default_context_name` | Session name if not overridden | "team-session" | Any string |
+| `default_model` | Default model for all agents | "sonnet" | Valid Claude model names |
 | `orchestrator_type` | Type of orchestrator to use | "enhanced" | "base", "enhanced" |
 | `poll_interval` | State monitoring frequency (seconds) | 0.5 | Number |
 | `mcp_port` | MCP server port | 8766 | Port number |
@@ -218,7 +218,7 @@ teams/
 |----------|-------------|----------|---------|
 | `name` | Agent identifier | Yes | "Architect" |
 | `role` | Agent role description | Yes | "System Design Lead" |
-| `model` | Agent-specific model | No | "claude-3.5-sonnet" |
+| `model` | Agent-specific model | No | "sonnet" |
 | `prompt_file` | Custom prompt file name | No | "custom_prompt.md" |
 
 #### Workflow Documentation (Optional)
@@ -281,14 +281,14 @@ team:
 agents:
   - name: "Lead"
     role: "Team Lead"
-    model: "claude-3.5-sonnet"
+    model: "opus"
     
   - name: "Assistant"
     role: "Assistant"
-    model: "claude-3.5-haiku"
+    model: "sonnet"
 
 settings:
-  default_session_name: "simple-session"
+  default_context_name: "simple-session"
   orchestrator_type: "enhanced"
 ```
 
@@ -316,7 +316,7 @@ agents:
     prompt_file: "business_analyst.md"
 
 settings:
-  default_session_name: "consulting-session"
+  default_context_name: "consulting-session"
 ```
 
 Create prompt files:

@@ -32,8 +32,8 @@ class TestTeamConfigLoader:
     def test_default_settings(self):
         """Test default settings are initialized."""
         loader = TeamConfigLoader()
-        assert loader.default_settings["default_session_name"] == "team-session"
-        assert loader.default_settings["default_model"] == "claude-3.5-sonnet"
+        assert loader.default_settings["default_context_name"] == "team-session"
+        assert loader.default_settings["default_model"] == "sonnet"
         assert loader.default_settings["orchestrator_type"] == "enhanced"
     
     def test_find_config_file_not_found(self):
@@ -114,7 +114,7 @@ class TestTeamConfigLoader:
                 {
                     "name": "Architect",
                     "role": "Team Lead",
-                    "model": "claude-3.5-sonnet"
+                    "model": "sonnet"
                 },
                 {
                     "name": "Developer",
@@ -122,7 +122,7 @@ class TestTeamConfigLoader:
                 }
             ],
             "settings": {
-                "default_session_name": "devops-session"
+                "default_context_name": "devops-session"
             }
         }
         
@@ -142,10 +142,10 @@ class TestTeamConfigLoader:
         assert len(team_config.agents) == 2
         assert team_config.agents[0].name == "Architect"
         assert team_config.agents[0].role == "Team Lead"
-        assert team_config.agents[0].model == "claude-3.5-sonnet"
+        assert team_config.agents[0].model == "sonnet"
         assert team_config.agents[0].prompt == "You are the architect."
         assert team_config.agents[1].name == "Developer"
-        assert team_config.settings["default_session_name"] == "devops-session"
+        assert team_config.settings["default_context_name"] == "devops-session"
         assert team_config.settings["orchestrator_type"] == "enhanced"  # default
     
     def test_load_config_file_not_found(self):

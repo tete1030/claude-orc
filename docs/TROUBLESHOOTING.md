@@ -166,24 +166,6 @@ claude chat --help
 ls -la ~/.claude/local/claude
 ```
 
-#### Solutions
-
-**Claude CLI not installed:**
-1. Visit https://claude.ai/cli for installation instructions
-2. Ensure claude is in your PATH or update `claude_bin` in config
-
-**Wrong binary path:**
-```python
-config = OrchestratorConfig(
-    claude_bin="/correct/path/to/claude"  # Update this
-)
-```
-
-**Permission issues:**
-```bash
-chmod +x ~/.claude/local/claude
-```
-
 ### 2. Messages Not Being Delivered
 
 #### Symptoms

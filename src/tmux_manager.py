@@ -482,7 +482,7 @@ class TmuxManager:
             
     def launch_claude_in_pane(self, pane_index: int, agent_name: str,
                             agent_prompt: str, working_dir: Optional[str] = None,
-                            claude_bin: Optional[str] = None, mcp_config: Optional[Dict[str, Any]] = None) -> Optional[str]:
+                            mcp_config: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """Launch Claude in specific pane with given configuration
         
         Returns:

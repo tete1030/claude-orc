@@ -63,16 +63,15 @@ class EnhancedOrchestrator(Orchestrator):
         # Initialize UI elements
         initial_states = {}
         for i, (agent_name, agent) in enumerate(self.agents.items()):
-            agent.pane_index = i  # Set pane index
             initial_states[agent_name] = "initializing"
-            self.tmux.set_pane_title(i, f"Agent: {agent_name}")
-            self.tmux.set_pane_agent_name(i, agent_name)
+            self.tmux.set_pane_title(agent.pane_index, f"Agent: {agent_name}")
+            self.tmux.set_pane_agent_name(agent.pane_index, agent_name)
             # Don't set per-pane border colors anymore
-            self.tmux.update_pane_message_count(i, 0)
-            self.tmux.set_pane_activity_indicator(i, False)
+            self.tmux.update_pane_message_count(agent.pane_index, 0)
+            self.tmux.set_pane_activity_indicator(agent.pane_index, False)
         
         # Set initial window-level border color once
-        initial_agent_states = {name: (i, "initializing") for i, name in enumerate(self.agents.keys())}
+        initial_agent_states = {name: (agent.pane_index, "initializing") for name, agent in self.agents.items()}
         self.tmux.update_border_colors_for_states(initial_agent_states)
         
         # Set initial status bar
@@ -154,7 +153,6 @@ class EnhancedOrchestrator(Orchestrator):
                 agent.name,
                 agent.system_prompt,
                 agent.working_dir,
-                self.config.claude_bin,
                 mcp_config=mcp_config
             )
             

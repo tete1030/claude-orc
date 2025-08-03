@@ -140,7 +140,7 @@ class TestErrorHandling(unittest.TestCase):
                 mock_exists.return_value = False
                 
                 with self.assertRaises(ValueError) as cm:
-                    config = OrchestratorConfig(claude_bin="")
+                    config = OrchestratorConfig()
                     
                 self.assertIn("Could not find Claude binary", str(cm.exception))
                 

@@ -87,13 +87,13 @@ team:
 agents:
   - name: "Lead"
     role: "Team Lead"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
   - name: "Developer"
     role: "Implementation Engineer"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
 
 settings:
-  default_session_name: "my-team"
+  default_context_name: "my-team"
   orchestrator_type: "enhanced"
 ```
 
@@ -222,7 +222,6 @@ The orchestrator also supports the legacy format:
 The `OrchestratorConfig` class supports:
 
 - `session_name`: Tmux session name (default: "claude-agents")
-- `claude_bin`: Path to Claude binary (default: auto-detected)
 - `poll_interval`: How often to check for new messages (default: 0.5 seconds)
 
 ## Testing

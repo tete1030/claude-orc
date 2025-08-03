@@ -220,8 +220,8 @@ ccorc launch --team devops-team --session my-project --debug
 
 # Override specific agent models
 ccorc launch --team devops-team --session my-project \
-  --agent-model "Architect=claude-3.5-sonnet" \
-  --agent-model "Developer=claude-3.5-haiku"
+  --agent-model "Architect=opus" \
+  --agent-model "Developer=sonnet"
 ```
 
 ### Team Context Monitoring

@@ -10,6 +10,11 @@ import argparse
 import json
 import subprocess
 import sys
+import asyncio
+import threading
+import time
+import signal
+
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -21,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import core modules
 try:
-    from src.team_context_manager import TeamContextManager as CoreTeamContextManager
+    from src.team_context_manager import TeamContextManager, TeamContextAgentInfo
     from src.team_config_loader import TeamConfigLoader
     from src.orchestrator import OrchestratorConfig, Orchestrator
     from src.orchestrator_enhanced import EnhancedOrchestrator
@@ -60,7 +65,7 @@ class SessionCLIManager:
 
     def __init__(self):
         self.container_prefix = "ccbox-"
-        self.core_manager = CoreTeamContextManager()
+        self.context_manager = TeamContextManager()
 
     def discover_contexts(self) -> Dict[str, ContextInfo]:
         """Discover all team contexts from running containers"""
@@ -186,7 +191,7 @@ class SessionCLIManager:
         """Get detailed information about a specific session"""
         # First check if session is registered
         try:
-            registered = self.core_manager.list_contexts()
+            registered = self.context_manager.list_contexts()
             if context_name not in registered:
                 # Not a registered team context
                 return None
@@ -260,7 +265,7 @@ class SessionCLIManager:
 
         try:
             # Get only registered contexts from core manager
-            registered = self.core_manager.list_contexts()
+            registered = self.context_manager.list_contexts()
 
             for name, session_data in registered.items():
                 # Check container status for each registered session
@@ -495,7 +500,7 @@ class SessionCLIManager:
 
         # Remove from core registry
         try:
-            self.core_manager.delete_context(context_name)
+            self.context_manager.delete_context(context_name)
             print(f"Removed session '{context_name}' from registry")
         except Exception as e:
             print(f"Warning: Could not remove from registry: {e}")
@@ -565,43 +570,136 @@ class SessionCLIManager:
                 continue
 
             # Look for config files
-            for ext in [".yaml", ".yml", ".json"]:
-                for config_file in search_path.glob(f"*{ext}"):
-                    try:
-                        # Try to load to validate
-                        config = loader.load_config(config_file.stem)
-                        teams.append(
-                            {
-                                "name": config_file.stem,
-                                "path": str(config_file),
-                                "team_name": config.name,
-                                "description": config.description,
-                                "agents": len(config.agents),
-                                "directory": search_path.name,
-                            }
-                        )
-                    except Exception as e:
-                        # Skip invalid configs
-                        print(
-                            f"Warning: Skipping invalid config {config_file}: {e}", file=sys.stderr
-                        )
+            for team_dir in search_path.glob(f"*"):
+                try:
+                    # Try to load to validate
+                    config = loader.load_config(team_dir.name)
+                    teams.append(
+                        {
+                            "name": team_dir.name,
+                            "path": str(team_dir / "team.yaml"),
+                            "team_name": config.name,
+                            "description": config.description,
+                            "agents": len(config.agents),
+                            "directory": search_path.name,
+                        }
+                    )
+                except Exception as e:
+                    # Skip invalid configs
+                    print(
+                        f"Warning: Skipping invalid config {config_file}: {e}", file=sys.stderr
+                    )
 
         return teams
+
+    def _detect_smart_layout(self, num_agents: int) -> dict:
+        """Detect optimal layout based on terminal size and agent count"""
+        if num_agents != 5:
+            return None  # Only optimize for 5-agent teams
+            
+        try:
+            # Try to get terminal size
+            result = subprocess.run(['stty', 'size'], capture_output=True, text=True)
+            if result.returncode == 0:
+                rows, cols = map(int, result.stdout.strip().split())
+                print(f"Terminal size detected: {cols}x{rows}")
+                
+                # Check if terminal is large enough for 2x3 grid
+                if cols >= 240 and rows >= 48:
+                    layout = {
+                        "type": "grid",
+                        "agent_count": 5,
+                        "grid_rows": 2,
+                        "grid_cols": 3
+                    }
+                    print("Using 2x3 grid layout for large terminal")
+                    return layout
+                elif cols >= 150:
+                    # Use custom 2+3 layout for medium terminals
+                    from src.layout_manager import CustomSplit, SplitDirection
+                    layout = {
+                        "type": "custom",
+                        "agent_count": 5,
+                        "custom_splits": [
+                            # First: split horizontally to create top/bottom (40% top, 60% bottom for 2:3 ratio)
+                            CustomSplit(target_pane=0, direction=SplitDirection.VERTICAL, size_percent=60),
+                            # Second: split bottom pane into 3 (split at 33%)
+                            CustomSplit(target_pane=1, direction=SplitDirection.HORIZONTAL, size_percent=33),
+                            # Third: split remaining bottom into 2 (split at 50%)
+                            CustomSplit(target_pane=2, direction=SplitDirection.HORIZONTAL, size_percent=50),
+                            # Fourth: split top pane into 2
+                            CustomSplit(target_pane=0, direction=SplitDirection.HORIZONTAL, size_percent=50),
+                        ]
+                    }
+                    print("Using custom 2+3 layout for medium terminal")
+                    return layout
+                else:
+                    # Fallback to horizontal for small terminals
+                    print("Terminal too small for grid, using horizontal layout")
+                    return {"type": "horizontal"}
+            else:
+                # If can't detect size, use custom 2+3 layout as default
+                from src.layout_manager import CustomSplit, SplitDirection
+                layout = {
+                    "type": "custom",
+                    "agent_count": 5,
+                    "custom_splits": [
+                        CustomSplit(target_pane=0, direction=SplitDirection.VERTICAL, size_percent=60),
+                        CustomSplit(target_pane=1, direction=SplitDirection.HORIZONTAL, size_percent=33),
+                        CustomSplit(target_pane=2, direction=SplitDirection.HORIZONTAL, size_percent=50),
+                        CustomSplit(target_pane=0, direction=SplitDirection.HORIZONTAL, size_percent=50),
+                    ]
+                }
+                print("Could not detect terminal size, using custom 2+3 layout")
+                return layout
+        except Exception as e:
+            print(f"Layout detection failed: {e}, using default")
+            return None
+
+    def _get_intelligent_model(self, agent_name: str, agent_role: str) -> str:
+        """Get intelligent model assignment based on agent role"""
+        # High-complexity roles get Opus
+        if any(keyword in agent_role.lower() or keyword in agent_name.lower() 
+               for keyword in ["architect", "lead"]):
+            return "opus"
+        # Implementation roles get Opus
+        elif any(keyword in agent_role.lower() or keyword in agent_name.lower() 
+                 for keyword in ["developer", "implementation", "coding"]):
+            return "opus"
+        # Standard roles get Sonnet  
+        else:
+            return "sonnet"
+
+    def _find_available_port(self, start_port: int, max_attempts: int = 10) -> int:
+        """Find an available port starting from start_port"""
+        import socket
+        for port_offset in range(max_attempts):
+            test_port = start_port + port_offset
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(('', test_port))
+                sock.close()
+                if test_port != start_port:
+                    print(f"Port {start_port} is busy, using port {test_port} instead")
+                return test_port
+            except OSError:
+                continue
+            finally:
+                sock.close()
+        
+        raise RuntimeError(f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}")
 
     def launch_team(
         self,
         team_name: str,
-        session_name: str = None,
+        context_name: str = None,
         model_override: str = None,
         agent_model_overrides: dict = None,
         force: bool = False,
         debug: bool = False,
+        task: str = None,
     ) -> bool:
         """Launch a team configuration"""
-        import asyncio
-        import threading
-        import time
-
         # Load team configuration
         loader = TeamConfigLoader()
         team_config = loader.load_config(team_name)
@@ -615,17 +713,52 @@ class SessionCLIManager:
             return False
 
         # Apply overrides
-        if session_name:
-            team_config.settings["default_session_name"] = session_name
+        if context_name:
+            team_config.settings["default_context_name"] = context_name
         else:
-            session_name = team_config.settings.get("default_session_name", "team-session")
+            context_name = team_config.settings.get("default_context_name", "team-context")
+
+        if context_name and self.context_manager.get_context(context_name) is not None:
+            if not force:
+                raise ValueError(f"Context '{context_name}' already exists")
+            else:
+                print(f"Forcing launch of team '{team_name}' to existing context '{context_name}', deleting existing context...")
+                self.cleanup_context(context_name, force=True)
 
         print(f"Launching team: {team_config.name}")
-        print(f"Session: {session_name}")
+        print(f"Context: {context_name}")
         print(f"Agents: {len(team_config.agents)}")
 
+        # Create orchestrator config
+        orc_config = OrchestratorConfig(context_name=context_name, poll_interval=0.5)
+
+        # Choose orchestrator type
+        orchestrator_type = team_config.settings.get("orchestrator_type", "enhanced")
+        if orchestrator_type == "enhanced":
+            orchestrator = EnhancedOrchestrator(orc_config)
+        else:
+            orchestrator = Orchestrator(orc_config)
+
+        # Override create_session to use force parameter and smart layout
+        original_create_session = orchestrator.tmux.create_session
+
+        team_force = force
+        def create_session_with_layout(num_panes, force=None, layout=None):
+            if force is None:
+                force = team_force
+            # Use smart layout if available and not explicitly specified
+            if layout is None:
+                layout = self._detect_smart_layout(num_panes)
+            return original_create_session(num_panes, force=force, layout=layout)
+
+        orchestrator.tmux.create_session = create_session_with_layout
+
+        # Find available MCP port with auto-discovery
+        desired_port = team_config.settings.get("mcp_port", 8765)
+        mcp_port = self._find_available_port(desired_port)
+        
         # Create MCP server
-        mcp_server = CentralMCPServer()
+        mcp_server = CentralMCPServer(orchestrator, port=mcp_port)
         mcp_server_loop = None
         mcp_thread = None
         shutdown_event = threading.Event()
@@ -651,125 +784,162 @@ class SessionCLIManager:
         # Wait for MCP server to be ready
         time.sleep(2)
 
-        # Create orchestrator config
-        orc_config = OrchestratorConfig(session_name=session_name, poll_interval=0.5)
+        # Register agents with orchestrator
+        agent_configs = dict()
+        for i, agent_config in enumerate(team_config.agents):
+            # Determine model to use with intelligent assignment
+            model = agent_config.model
+            if model_override:
+                model = model_override
+            elif agent_model_overrides and agent_config.name in agent_model_overrides:
+                model = agent_model_overrides[agent_config.name]
+            elif not model:
+                # Use intelligent model assignment if no explicit model
+                model = self._get_intelligent_model(agent_config.name, agent_config.role)
 
-        # Choose orchestrator type
-        orchestrator_type = team_config.settings.get("orchestrator_type", "enhanced")
-        if orchestrator_type == "enhanced":
-            orchestrator = EnhancedOrchestrator(orc_config)
-        else:
-            orchestrator = Orchestrator(orc_config)
+            agent_name_sanitized = agent_config.name.lower().replace(" ", "-")
+            if context_name:
+                claude_instance = f"{context_name}-{agent_name_sanitized}"
+            else:
+                claude_instance = agent_name_sanitized
 
-        # Override create_session to use force parameter
-        original_create_session = orchestrator.tmux.create_session
+            # Create agent prompt with task injection for Architect
+            prompt = agent_config.prompt or f"You are {agent_config.name}, with role: {agent_config.role}"
+            if task and agent_config.name.lower() == "architect":
+                task_context = f"\n\nInitial task from user: {task}"
+                prompt += task_context
+                print(f"Task injected into Architect prompt: {task}")
 
-        def create_session_with_force(num_panes, force_param=None):
-            if force_param is None:
-                force_param = force
-            return original_create_session(num_panes, force=force_param)
+            print(f"Registering agent: {agent_config.name} ({agent_config.role}) - Model: {model}")
 
-        orchestrator.tmux.create_session = create_session_with_force
+            # Register agent with orchestrator
+            session_id = f"session_{i}"
+            agent = orchestrator.register_agent(agent_config.name, session_id, prompt)
+
+            # Track agent config for team context
+            agent_configs[agent_config.name] = {
+                "name": agent_config.name,
+                "instance_name": claude_instance,
+                "role": agent_config.role,
+                "model": model,  # Use the actual resolved model
+                "prompt": agent_config.prompt,
+                "prompt_file": agent_config.prompt_file,
+                "pane_index": agent.pane_index,
+            }
 
         # Configure launcher for model overrides
-        if model_override or agent_model_overrides or debug or session_name:
+        if model_override or agent_model_overrides or debug or context_name:
             original_build = ClaudeLauncherConfig.build_command_string
 
             def patched_build(agent_name, session_id, system_prompt, mcp_config_path=None):
                 # Determine model for this agent
-                model = None
-                if model_override:
-                    model = model_override
-                elif agent_model_overrides and agent_name in agent_model_overrides:
-                    model = agent_model_overrides[agent_name]
-                else:
-                    # Find agent in config to get its model
-                    for agent in team_config.agents:
-                        if agent.name == agent_name:
-                            model = agent.model
-                            break
-                    if not model:
-                        model = team_config.settings.get("default_model", "claude-3.5-sonnet")
-
-                # Set container name based on session
-                if session_name:
-                    container_suffix = agent_name.lower().replace(" ", "-")
-                    os.environ["CLAUDE_INSTANCE"] = f"{session_name}-{container_suffix}"
+                model = agent_configs[agent_name]["model"]
 
                 # Build command with model and debug
-                cmd = original_build(agent_name, session_id, system_prompt, mcp_config_path)
+                cmd = original_build(agent_configs[agent_name]["instance_name"], session_id, system_prompt, mcp_config_path)
                 if model:
-                    cmd = cmd.replace("claude", f"claude --model {model}", 1)
+                    cmd = cmd.replace("ccdk", f"ccdk --model {model}", 1)
                 if debug:
-                    cmd = cmd.replace("claude", "claude --debug", 1)
+                    cmd = cmd.replace("ccdk", "ccdk --debug", 1)
 
                 return cmd
 
             ClaudeLauncherConfig.build_command_string = patched_build
 
-        # Initialize team context manager for persistence
-        team_manager = CoreTeamContextManager()
+        # Setup graceful shutdown handling
+        def signal_handler(signum, frame):
+            """Handle Ctrl+C gracefully"""
+            print("\n\nReceived interrupt signal. Shutting down gracefully...")
+            shutdown_event.set()
+            
+            # Stop orchestrator first
+            if orchestrator and orchestrator.running:
+                orchestrator.stop()
+            
+            # Stop MCP server gracefully  
+            if mcp_server_loop and not mcp_server_loop.is_closed():
+                # Cancel all tasks in the event loop
+                def shutdown_loop():
+                    # Cancel all running tasks
+                    tasks = asyncio.all_tasks(mcp_server_loop)
+                    for task in tasks:
+                        task.cancel()
+                    mcp_server_loop.stop()
+                
+                mcp_server_loop.call_soon_threadsafe(shutdown_loop)
+                
+                # Give the thread a moment to clean up
+                if mcp_thread and mcp_thread.is_alive():
+                    mcp_thread.join(timeout=2.0)
+            
+            # Exit cleanly
+            sys.exit(0)
+
+        # Register signal handler
+        signal.signal(signal.SIGINT, signal_handler)
 
         try:
-            # Register agents with orchestrator
-            agent_configs = []
-            for i, agent in enumerate(team_config.agents):
-                # Determine model to use
-                model = agent.model
-                if model_override:
-                    model = model_override
-                elif agent_model_overrides and agent.name in agent_model_overrides:
-                    model = agent_model_overrides[agent.name]
-                elif not model:
-                    model = team_config.settings.get("default_model", "claude-3.5-sonnet")
-
-                # Create agent prompt
-                prompt = agent.prompt or f"You are {agent.name}, with role: {agent.role}"
-
-                print(f"Registering agent: {agent.name} ({agent.role}) - Model: {model}")
-
-                # Register agent with orchestrator
-                session_id = f"session_{i}"
-                orchestrator.register_agent(agent.name, session_id, prompt)
-
-                # Track agent config for team context
-                agent_configs.append(
-                    {
-                        "name": agent.name,
-                        "role": agent.role,
-                        "model": model,
-                        "session_id": session_id,
-                    }
-                )
-
             # Start the orchestrator
             print(f"\nStarting orchestrator with {len(team_config.agents)} agents...")
-            orchestrator.start()
+            orchestrator.start(mcp_port=mcp_port)
 
             # Register team context for persistence
-            if session_name:
-                containers = []
+            if context_name:
+                agents = []
                 tmux_session = orchestrator.tmux.session_name
 
                 # Get container names from environment
-                for agent in team_config.agents:
-                    container_suffix = agent.name.lower().replace(" ", "-")
-                    container_name = f"ccbox-{session_name}-{container_suffix}"
-                    containers.append(container_name)
+                for agent_cfg in agent_configs.values():
+                    container_name = f"ccbox-{agent_cfg['instance_name']}"
+                    agents.append(TeamContextAgentInfo(
+                        name=agent_cfg["name"],
+                        container=container_name,
+                        model=agent_cfg["model"],
+                        pane_index=agent_cfg["pane_index"]
+                    ))
 
                 # Create team context
-                team_manager.create_context(
-                    context_name=session_name,
-                    agents=agent_configs,
-                    containers=containers,
+                self.context_manager.create_context(
+                    context_name=context_name,
+                    agents=agents,
                     tmux_session=tmux_session,
                 )
 
-                print(f"Team context '{session_name}' registered for persistence")
+                print(f"Team context '{context_name}' registered for persistence")
 
-            print(f"\nTeam '{team_config.name}' launched successfully!")
-            print(f"Tmux session: {orchestrator.tmux.session_name}")
-            print("\nPress Ctrl+C to stop the orchestrator...")
+            # Rich status output
+            print(f"""
+============================================================
+Enhanced Team Launch - {team_config.name}
+============================================================
+
+✓ Team launched successfully!
+✓ MCP server running on port {mcp_port}
+✓ Debug mode: {'enabled' if debug else 'disabled'}
+
+Team Layout: {'Auto-selected based on terminal size' if len(team_config.agents) == 5 else 'Default layout'}
+  • Smart layout detection for 5-agent teams
+  • Adaptive layout based on terminal dimensions
+
+Team Members & Models:
+""")
+            for agent_cfg in agent_configs.values():
+                print(f"  • {agent_cfg['name']} ({agent_cfg['role']}) - Model: {agent_cfg['model']}")
+
+            print(f"""
+Capabilities:
+  • Read: Full codebase access (src/, tests/, docs/)
+  • Write: Limited to .temp/ directory for experiments
+  • Execute: Tests and development commands
+  • MCP Communication: Inter-agent messaging
+
+{f"Initial Task: {task}" if task else "The team will self-organize and identify improvements."}
+
+Tmux session: {orchestrator.tmux.session_name}
+Attach with: tmux attach -t {orchestrator.tmux.session_name}
+
+Press Ctrl+C to stop
+""")
 
             # Wait for interrupt
             try:
@@ -871,26 +1041,26 @@ def main():
     )
 
     # Show session info
-    info_parser = subparsers.add_parser("info", help="Show detailed session information")
-    info_parser.add_argument("context_name", help="Name of the session")
+    info_parser = subparsers.add_parser("info", help="Show detailed context information")
+    info_parser.add_argument("context_name", help="Name of the context")
 
     # Health check
-    health_parser = subparsers.add_parser("health", help="Check session health")
-    health_parser.add_argument("context_name", help="Name of the session")
+    health_parser = subparsers.add_parser("health", help="Check context health")
+    health_parser.add_argument("context_name", help="Name of the context")
     health_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # Cleanup
-    clean_parser = subparsers.add_parser("clean", help="Clean up a session")
-    clean_parser.add_argument("context_name", help="Name of the session")
+    clean_parser = subparsers.add_parser("clean", help="Clean up a context")
+    clean_parser.add_argument("context_name", help="Name of the context")
     clean_parser.add_argument("--force", "-f", action="store_true", help="Skip confirmation prompt")
 
     # Export
-    export_parser = subparsers.add_parser("export", help="Export session configuration")
-    export_parser.add_argument("context_name", help="Name of the session")
+    export_parser = subparsers.add_parser("export", help="Export context configuration")
+    export_parser.add_argument("context_name", help="Name of the context")
     export_parser.add_argument("output_file", help="Output file path")
 
     # Import
-    import_parser = subparsers.add_parser("import", help="Import session configuration")
+    import_parser = subparsers.add_parser("import", help="Import context configuration")
     import_parser.add_argument("config_file", help="Configuration file path")
 
     # Teams subcommand
@@ -905,7 +1075,7 @@ def main():
     # Launch team
     launch_parser = subparsers.add_parser("launch", help="Launch a team configuration")
     launch_parser.add_argument("--team", required=True, help="Team configuration name")
-    launch_parser.add_argument("--session", help="Override session name")
+    launch_parser.add_argument("--name", help="Override context name")
     launch_parser.add_argument("--model", help="Override all agents' models")
     launch_parser.add_argument(
         "--agent-model",
@@ -917,6 +1087,7 @@ def main():
         "--force", "-f", action="store_true", help="Force kill existing session if it exists"
     )
     launch_parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    launch_parser.add_argument("--task", help="Initial task for the team (will be added to Architect prompt)")
 
     args = parser.parse_args()
 
@@ -950,7 +1121,7 @@ def main():
             if "error" in health:
                 print(health["error"])
             else:
-                print(f"Session: {health['context_name']}")
+                print(f"Context: {health['context_name']}")
                 print(f"Overall health: {health['overall_health']}")
 
                 if health["issues"]:
@@ -986,11 +1157,12 @@ def main():
         # Launch the team
         success = manager.launch_team(
             team_name=args.team,
-            session_name=args.session,
+            context_name=args.name,
             model_override=args.model,
             agent_model_overrides=agent_model_overrides,
             force=args.force,
             debug=args.debug,
+            task=args.task,
         )
 
         if not success:

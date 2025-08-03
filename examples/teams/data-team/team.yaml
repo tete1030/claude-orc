@@ -5,23 +5,23 @@ team:
 agents:
   - name: "Data Architect"
     role: "Data Architecture and Strategy Lead"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "Data Engineer"
     role: "Data Pipeline and Infrastructure Engineer"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "ML Engineer"
     role: "Machine Learning and Model Development"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
     
   - name: "Analyst"
     role: "Data Analysis and Business Intelligence"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
 
 settings:
-  default_session_name: "data-team"
-  default_model: "claude-3.5-sonnet"
+  default_context_name: "data-team"
+  default_model: "sonnet"
   orchestrator_type: "enhanced"
   poll_interval: 0.8
   mcp_port: 8768

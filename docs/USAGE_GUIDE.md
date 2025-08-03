@@ -39,10 +39,10 @@ ccorc launch --team devops-team
 ccorc launch --team devops-team --session my-project
 
 # Launch with different model
-ccorc launch --team devops-team --model claude-3.5-haiku
+ccorc launch --team devops-team --model sonnet
 
 # Override individual agent models
-ccorc launch --team devops-team --agent-model "Architect=claude-3.5-sonnet" --agent-model "Developer=claude-3.5-haiku"
+ccorc launch --team devops-team --agent-model "Architect=opus" --agent-model "Developer=sonnet"
 
 # Force kill existing session
 ccorc launch --team devops-team --force
@@ -63,13 +63,13 @@ team:
 agents:
   - name: "Lead"
     role: "Team Lead and Coordinator"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
   - name: "Specialist"
     role: "Domain Expert"
-    model: "claude-3.5-sonnet"
+    model: "sonnet"
 
 settings:
-  default_session_name: "my-team"
+  default_context_name: "my-team"
   orchestrator_type: "enhanced"
   poll_interval: 0.5
 ```

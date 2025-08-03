@@ -5,27 +5,21 @@ team:
 agents:
   - name: "Architect"
     role: "Team Lead and System Architect"
-    model: "claude-3.5-sonnet"
     
   - name: "Developer"
     role: "Implementation and Coding Engineer"
-    model: "claude-3.5-sonnet"
     
   - name: "QA"
     role: "Quality Assurance Engineer"
-    model: "claude-3.5-sonnet"
     
   - name: "DevOps"
     role: "Infrastructure and Deployment Engineer"
-    model: "claude-3.5-sonnet"
     
   - name: "Docs"
     role: "Documentation Specialist"
-    model: "claude-3.5-sonnet"
 
 settings:
-  default_session_name: "devops-team"
-  default_model: "claude-3.5-sonnet"
+  default_context_name: "devops-team"
   orchestrator_type: "enhanced"
   poll_interval: 0.5
   mcp_port: 8766

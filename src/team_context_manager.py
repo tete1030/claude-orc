@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 @dataclass
-class AgentInfo:
+class TeamContextAgentInfo:
     """Information about an agent in a context"""
     name: str
     container: str
@@ -35,7 +35,7 @@ class TeamContext:
     containers: List[str]
     tmux_session: str  # Note: keeping tmux_session as it refers to actual tmux session
     created_at: str
-    agents: List[AgentInfo]
+    agents: List[TeamContextAgentInfo]
     updated_at: Optional[str] = None
     orchestrator_config: Dict[str, Any] = field(default_factory=dict)
     
@@ -75,8 +75,8 @@ class TeamContextManager:
                 
             contexts = {}
             for name, context_data in data.items():
-                # Convert agent dicts to AgentInfo objects
-                agents = [AgentInfo(**agent) for agent in context_data.get('agents', [])]
+                # Convert agent dicts to TeamContextAgentInfo objects
+                agents = [TeamContextAgentInfo(**agent) for agent in context_data.get('agents', [])]
                 context_data['agents'] = agents
                 
                 contexts[name] = TeamContext(**context_data)
@@ -145,13 +145,13 @@ class TeamContextManager:
         except Exception:
             return False
             
-    def create_context(self, context_name: str, agents: List[AgentInfo], 
+    def create_context(self, context_name: str, agents: List[TeamContextAgentInfo], 
                       tmux_session: str, orchestrator_config: Optional[Dict] = None) -> TeamContext:
         """Create a new team context
         
         Args:
             context_name: Unique name for this team context
-            agents: List of AgentInfo objects defining the agents
+            agents: List of TeamContextAgentInfo objects defining the agents
             tmux_session: Name of the tmux session
             orchestrator_config: Optional orchestrator configuration
             

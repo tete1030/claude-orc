@@ -101,7 +101,6 @@ config = OrchestratorConfig(
 #### Attributes
 
 - `session_name` (str): Name of the tmux session. Default: `"claude-agents"`
-- `claude_bin` (str): Path to Claude binary. Default: `"~/.claude/local/claude"`
 - `session_dir` (str): Directory for session files. Auto-set based on CWD
 - `poll_interval` (float): Seconds between session file checks. Default: `0.5`
 - `interrupt_cooldown` (float): Minimum seconds between interrupts. Default: `2.0`

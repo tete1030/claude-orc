@@ -34,8 +34,7 @@ class Agent:
 @dataclass
 class OrchestratorConfig:
     """Configuration for orchestrator"""
-    session_name: str = "claude-agents"
-    claude_bin: str = ""  # Will be auto-detected if not specified
+    context_name: str = "claude-agents"
     session_dir: str = ""  # Will be set dynamically based on working directory
     poll_interval: float = 0.5
     interrupt_cooldown: float = 2.0  # Seconds between interrupts to same agent
@@ -48,36 +47,13 @@ class OrchestratorConfig:
             cwd = os.getcwd()
             escaped_cwd = cwd.replace('/', '-')
             self.session_dir = os.path.expanduser(f"~/.claude/projects/{escaped_cwd}")
-        
-        # Auto-detect Claude binary if not specified
-        if not self.claude_bin:
-            import subprocess
-            try:
-                result = subprocess.run(["which", "claude"], capture_output=True, text=True)
-                if result.returncode == 0:
-                    self.claude_bin = result.stdout.strip()
-            except Exception:
-                pass
-            
-            # If which didn't work, try common locations
-            if not self.claude_bin:
-                for path in ["/usr/local/bin/claude", "/usr/bin/claude",
-                             os.path.expanduser("~/.local/bin/claude"),
-                             os.path.expanduser("~/.claude/local/claude")]:
-                    if os.path.exists(path):
-                        self.claude_bin = path
-                        break
-            
-            if not self.claude_bin:
-                raise ValueError("Could not find Claude binary. Please specify claude_bin in config.")
-
 
 class Orchestrator:
     """Main orchestrator for multi-agent coordination"""
     
     def __init__(self, config: Optional[OrchestratorConfig] = None):
         self.config = config or OrchestratorConfig()
-        self.tmux = TmuxManager(self.config.session_name)
+        self.tmux = TmuxManager(self.config.context_name)
         self.agents: Dict[str, Agent] = {}
         self.running = False
         self.monitors_thread: Optional[threading.Thread] = None
@@ -100,8 +76,9 @@ class Orchestrator:
         }
         
     def register_agent(self, name: str, session_id: str, system_prompt: str,
-                      working_dir: Optional[str] = None) -> None:
+                      working_dir: Optional[str] = None) -> Agent:
         """Register a new agent"""
+        agent = None
         with self._agents_lock:
             if name in self.agents:
                 raise ValueError(f"Agent {name} already registered - duplicate names not allowed")
@@ -130,6 +107,7 @@ class Orchestrator:
             self.mailbox[name] = []
         
         self.logger.info(f"Registered agent {name}")
+        return agent
         
     def start(self, mcp_port: Optional[int] = None) -> bool:
         """Start the orchestrator and all agents
@@ -145,12 +123,12 @@ class Orchestrator:
             self.logger.error("No agents registered")
             return False
             
-        # Create session-specific directory with bin and mcp_configs subdirectories
+        # Create context-specific directory with bin and mcp_configs subdirectories
         import random
-        session_id = f"orc-{random.randint(100000, 999999)}"
+        context_mcp_id = f"orc-{random.randint(100000, 999999)}"
         
-        # Use /tmp/claude-orc/{session-id}
-        self.shared_dir = f"/tmp/claude-orc/{session_id}"
+        # Use /tmp/claude-orc/{context-mcp-id}
+        self.shared_dir = f"/tmp/claude-orc/{context_mcp_id}"
         self.shared_bin_dir = os.path.join(self.shared_dir, "bin")
         self.shared_mcp_dir = os.path.join(self.shared_dir, "mcp_configs")
         
@@ -213,7 +191,6 @@ class Orchestrator:
                 agent.name,  # Now passing agent name instead of session_id
                 agent.system_prompt,
                 agent.working_dir,
-                self.config.claude_bin,
                 mcp_config=mcp_config
             )
             

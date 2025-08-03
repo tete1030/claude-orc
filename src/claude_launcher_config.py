@@ -14,12 +14,12 @@ class ClaudeLauncherConfig:
     DOCKER_SCRIPT = "ccdk"
     
     @classmethod
-    def build_command(cls, agent_name: str, session_id: str, system_prompt: str, 
+    def build_command(cls, instance_name: str, session_id: str, system_prompt: str, 
                      mcp_config_path: Optional[str] = None) -> List[str]:
         """Build the Claude launch command as a list of arguments"""
         cmd = [
             "env",
-            f"CLAUDE_INSTANCE={agent_name}",
+            f"CLAUDE_INSTANCE={instance_name}",
             "CLAUDE_CONTAINER_MODE=isolated",
             cls.DOCKER_SCRIPT,
             "run",
@@ -28,18 +28,18 @@ class ClaudeLauncherConfig:
         ]
         
         if mcp_config_path:
-            cmd.extend(["--mcp-config", mcp_config_path, "--debug"])
+            cmd.extend(["--mcp-config", mcp_config_path])
             
         return cmd
     
     @classmethod
-    def build_command_string(cls, agent_name: str, session_id: str, system_prompt: str,
+    def build_command_string(cls, instance_name: str, session_id: str, system_prompt: str,
                            mcp_config_path: Optional[str] = None) -> str:
         """Build the command as a shell-ready string"""
         # Build the base command
         cmd_parts = [
             "env",
-            f"CLAUDE_INSTANCE={agent_name}",
+            f"CLAUDE_INSTANCE={instance_name}",
             "CLAUDE_CONTAINER_MODE=isolated",
             cls.DOCKER_SCRIPT,
             "run",
@@ -48,7 +48,7 @@ class ClaudeLauncherConfig:
         ]
         
         if mcp_config_path:
-            cmd_parts.extend(["--mcp-config", mcp_config_path, "--debug"])
+            cmd_parts.extend(["--mcp-config", mcp_config_path])
             
         return " ".join(cmd_parts)
     

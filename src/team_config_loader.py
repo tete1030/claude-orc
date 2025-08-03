@@ -19,12 +19,12 @@ Example configuration structure:
     {
       "name": "Architect",
       "role": "Team Lead",
-      "model": "claude-3.5-sonnet"
+      "model": "sonnet"
     }
   ],
   "settings": {
-    "default_session_name": "team-session",
-    "default_model": "claude-3.5-sonnet",
+    "default_context_name": "team-session",
+    "default_model": "sonnet",
     "orchestrator_type": "enhanced"
   }
 }
@@ -49,7 +49,7 @@ class AgentConfig(TypedDict, total=False):
 class TeamSettings(TypedDict, total=False):
     """Type definition for team settings."""
 
-    default_session_name: str
+    default_context_name: str
     default_model: str
     orchestrator_type: str
 
@@ -63,7 +63,7 @@ class TeamConfigData(TypedDict):
 
 
 @dataclass
-class Agent:
+class AgentConfig:
     """Represents an agent in the team."""
 
     name: str
@@ -79,7 +79,7 @@ class TeamConfig:
 
     name: str
     description: str
-    agents: List[Agent] = field(default_factory=list)
+    agents: List[AgentConfig] = field(default_factory=list)
     settings: Dict[str, Any] = field(default_factory=dict)
     config_path: Optional[Path] = None
 
@@ -103,8 +103,8 @@ class TeamConfigLoader:
 
         # Default settings
         self.default_settings = {
-            "default_session_name": "team-session",
-            "default_model": "claude-3.5-sonnet",
+            "default_context_name": "team-session",
+            "default_model": "sonnet",
             "orchestrator_type": "enhanced",
         }
 
@@ -129,7 +129,7 @@ class TeamConfigLoader:
         # Search for file with supported extensions
         for search_path in self.search_paths:
             for ext in [".yaml", ".yml", ".json"]:
-                config_path = search_path / f"{base_name}{ext}"
+                config_path = search_path / f"{base_name}" / f"team{ext}"
                 if config_path.exists():
                     self.logger.debug(f"Found config file: {config_path}")
                     return config_path
@@ -254,7 +254,7 @@ class TeamConfigLoader:
             if not isinstance(agent_data, dict):
                 raise ValueError(f"Invalid agent configuration: {agent_data}")
 
-            agent = Agent(
+            agent = AgentConfig(
                 name=agent_data.get("name", "Unknown"),
                 role=agent_data.get("role", "Agent"),
                 model=agent_data.get("model"),
@@ -319,7 +319,7 @@ class TeamConfigLoader:
 
         return errors
 
-    def get_agent_by_name(self, config: TeamConfig, name: str) -> Optional[Agent]:
+    def get_agent_by_name(self, config: TeamConfig, name: str) -> Optional[AgentConfig]:
         """Get an agent by name from the configuration.
 
         Args:
