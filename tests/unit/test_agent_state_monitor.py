@@ -621,6 +621,209 @@ More conversation...
             self.assertIsInstance(anomaly['line_num'], int)
             self.assertIsInstance(anomaly['content'], str)
             self.assertIsInstance(anomaly['context'], list)
+    
+    def test_command_mode_input_variations(self):
+        """Test that all command mode variations are not flagged as anomalies"""
+        self._set_agent_as_initialized()
+        
+        # Command mode variations that should NOT be anomalies
+        command_variations = [
+            # Empty command mode prompt
+            """
+╭────────────────────────────────────────────────────────────╮
+│ > /                                                         │
+╰────────────────────────────────────────────────────────────╯
+""",
+            # Command mode with slash command
+            """
+╭────────────────────────────────────────────────────────────╮
+│ > /help                                                     │
+╰────────────────────────────────────────────────────────────╯
+""",
+            # Regular typing (not command mode but should also work)
+            """
+╭────────────────────────────────────────────────────────────╮
+│ > a                                                         │
+╰────────────────────────────────────────────────────────────╯
+""",
+            # More typing
+            """
+╭────────────────────────────────────────────────────────────╮
+│ > aaa                                                       │
+╰────────────────────────────────────────────────────────────╯
+""",
+            # Full command
+            """
+╭────────────────────────────────────────────────────────────╮
+│ > list_agents                                               │
+╰────────────────────────────────────────────────────────────╯
+"""
+        ]
+        
+        for i, content in enumerate(command_variations):
+            anomalies = self.monitor.detect_ui_anomalies(content)
+            self.assertEqual(len(anomalies), 0, 
+                           f"Command variation {i+1} should not have anomalies: {content.strip()}")
+            
+            # Also verify state detection works correctly
+            state = self.monitor.detect_agent_state(content, "TestAgent")
+            self.assertEqual(state, AgentState.WRITING, 
+                           f"Command variation {i+1} should be detected as WRITING state")
+    
+    def test_dialog_box_variations(self):
+        """Test that all dialog box types are recognized and not flagged as anomalies"""
+        self._set_agent_as_initialized()
+        
+        dialog_variations = [
+            # Settings dialog (incomplete - no bottom border)
+            {
+                "content": """
+╭────────────────────────────────────────────────────────────╮
+│ Settings                                                    │
+│ Configure Claude Code preferences                           │
+│                                                             │
+│ ❯ Auto-compact                              true            │
+""",
+                "expected_anomalies": 0,
+                "description": "Settings dialog (incomplete)"
+            },
+            # Agents dialog (incomplete)
+            {
+                "content": """
+╭────────────────────────────────────────────────────────────╮
+│ Agents                                                      │
+│ No agents found                                             │
+│                                                             │
+│ ❯ Create new agent                                          │
+""",
+                "expected_anomalies": 0,
+                "description": "Agents dialog (incomplete)"
+            },
+            # Hook Configuration dialog (incomplete)
+            {
+                "content": """
+╭────────────────────────────────────────────────────────────╮
+│ Hook Configuration                                          │
+│                                                             │
+│ Hooks are shell commands you can register to run during     │
+│ Claude Code processing. Docs                                │
+""",
+                "expected_anomalies": 0,
+                "description": "Hook Configuration dialog (incomplete)"
+            },
+            # Select Model dialog (incomplete)
+            {
+                "content": """
+╭────────────────────────────────────────────────────────────╮
+│                                                             │
+│  Select Model                                               │
+│  Switch between Claude models. Applies to this session and  │
+│   future Claude Code sessions. For custom model names,      │
+""",
+                "expected_anomalies": 0,
+                "description": "Select Model dialog (incomplete)"
+            },
+            # Permissions dialog (complete box)
+            {
+                "content": """
+╭────────────────────────────────────────────────────────────╮
+│ Permissions:  Allow   Deny   Workspace                      │
+│                                                             │
+│ Claude Code won't ask before using allowed tools.           │
+│                                                             │
+│ ❯ 1. Add a new rule…                                        │
+│                                                             │
+╰────────────────────────────────────────────────────────────╯
+""",
+                "expected_anomalies": 0,
+                "description": "Permissions dialog (complete)"
+            }
+        ]
+        
+        for dialog in dialog_variations:
+            anomalies = self.monitor.detect_ui_anomalies(dialog["content"])
+            self.assertEqual(len(anomalies), dialog["expected_anomalies"], 
+                           f"{dialog['description']} should have {dialog['expected_anomalies']} anomalies")
+    
+    def test_genuine_anomalies_still_detected(self):
+        """Test that genuine anomalies are still properly detected"""
+        self._set_agent_as_initialized()
+        
+        # Unknown incomplete box (not a recognized dialog)
+        unknown_incomplete = """
+╭────────────────────────────────────────────────────────────╮
+│ This is some random content that doesn't match             │
+│ any known dialog pattern                                    │
+"""
+        anomalies = self.monitor.detect_ui_anomalies(unknown_incomplete)
+        self.assertGreaterEqual(len(anomalies), 1, 
+                              "Unknown incomplete box should be flagged as anomaly")
+        
+        # Multiple input boxes
+        multiple_inputs = """
+╭────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰────────────────────────────────────────────────────────────╯
+
+╭────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰────────────────────────────────────────────────────────────╯
+"""
+        anomalies = self.monitor.detect_ui_anomalies(multiple_inputs)
+        self.assertGreaterEqual(len(anomalies), 1, 
+                              "Multiple input boxes should be flagged as anomaly")
+        
+        # Verify we're getting the right anomaly type
+        anomaly = anomalies[0]
+        self.assertIn("Multiple input boxes", anomaly['content'])
+    
+    def test_dialog_box_classification(self):
+        """Test that dialog boxes are properly classified by _classify_box_type"""
+        # This tests the internal classification method indirectly through anomaly detection
+        
+        # Complete Permissions dialog should be classified as 'dialog'
+        permissions_content = """
+╭────────────────────────────────────────────────────────────╮
+│ Permissions:  Allow   Deny   Workspace                      │
+│                                                             │
+│ Claude Code won't ask before using allowed tools.           │
+│                                                             │
+│ ❯ 1. Add a new rule…                                        │
+│                                                             │
+╰────────────────────────────────────────────────────────────╯
+"""
+        # Should have no anomalies because it's a recognized dialog type
+        anomalies = self.monitor.detect_ui_anomalies(permissions_content)
+        self.assertEqual(len(anomalies), 0, 
+                        "Permissions dialog should be recognized and not flagged as unknown")
+    
+    def test_mixed_content_with_dialogs(self):
+        """Test content with both dialogs and normal prompt boxes"""
+        mixed_content = """
+Some previous output...
+
+╭────────────────────────────────────────────────────────────╮
+│ Welcome to Claude Code v1.0.0                               │
+╰────────────────────────────────────────────────────────────╯
+
+More output...
+
+╭────────────────────────────────────────────────────────────╮
+│ Settings                                                    │
+│ Configure Claude Code preferences                           │
+│                                                             │
+│ ❯ Auto-compact                              true            │
+
+Some more text...
+
+╭────────────────────────────────────────────────────────────╮
+│ >                                                           │
+╰────────────────────────────────────────────────────────────╯
+"""
+        anomalies = self.monitor.detect_ui_anomalies(mixed_content)
+        # Should have no anomalies - welcome box, settings dialog (incomplete), and input box are all valid
+        self.assertEqual(len(anomalies), 0, 
+                        "Mixed content with valid UI elements should have no anomalies")
 
 
 if __name__ == '__main__':

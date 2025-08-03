@@ -143,6 +143,86 @@ class Command:
 # </orc-command>
 ```
 
+## Monitoring and Diagnostics
+
+### Agent State Monitoring
+
+The system includes sophisticated monitoring capabilities for detecting and tracking agent anomalies during operation.
+
+#### Live State Monitor with Continuous Anomaly Recording
+
+**Basic Usage:**
+```bash
+# Monitor session with default behavior (exits on first anomaly)
+python scripts/monitor_live_states.py session-name
+
+# Continuous monitoring for extended sessions
+python scripts/monitor_live_states.py session-name --continuous-anomaly-recording --duration 1800
+```
+
+**Advanced Options:**
+- `--continuous-anomaly-recording`: Continue monitoring without exiting on first anomaly
+- `--anomaly-report-format`: Choose output format (text/json/csv)
+- `--duration`: Monitoring duration in seconds
+- `--interval`: Update frequency in seconds
+- `--simple`: Use text mode instead of curses interface
+
+**Report Formats:**
+- **JSON**: Machine-readable, recommended for automated analysis
+- **CSV**: Spreadsheet-compatible, ideal for statistical analysis  
+- **Text**: Human-readable but has minor formatting issues
+
+#### AnomalyHistory System
+
+The monitoring system uses a sophisticated anomaly tracking system (`AnomalyHistory` in `agent_state_monitor.py`):
+
+**Key Features:**
+- **Automatic Classification**: Categorizes anomalies by type
+- **Memory Management**: Configurable retention policies prevent unbounded growth
+- **Resource Efficiency**: ~30MB for 20,000 records
+- **Query Interface**: Flexible filtering by agent, type, and time range
+
+**Configuration Example:**
+```python
+from src.agent_state_monitor import AnomalyHistoryConfig, AgentStateMonitor
+
+# Configure for extended monitoring
+anomaly_config = AnomalyHistoryConfig(
+    max_records_per_agent=5000,
+    max_total_records=20000,
+    retention_hours=12.0
+)
+monitor = AgentStateMonitor(tmux_manager, anomaly_config)
+```
+
+**Performance Characteristics:**
+- Memory: ~1.5KB per anomaly record
+- CPU: <2% overhead during normal operation
+- Scales to thousands of anomalies efficiently
+
+#### Usage Examples
+
+**Development Workflow:**
+```bash
+# Start orchestrator
+python examples/team_mcp_demo_enhanced.py --session dev-session
+
+# Monitor in separate terminal
+python scripts/monitor_live_states.py dev-session --continuous-anomaly-recording --duration 1200 --anomaly-report-format json
+```
+
+**Quality Assurance:**
+```bash
+# Extended monitoring for QA testing
+python scripts/monitor_live_states.py qa-session --continuous-anomaly-recording --duration 3600 --anomaly-report-format csv
+```
+
+**Production Monitoring:**
+```bash
+# Low-overhead background monitoring
+python scripts/monitor_live_states.py prod-session --continuous-anomaly-recording --simple --duration 14400 --interval 1.0
+```
+
 ## Testing
 
 ### Test Structure

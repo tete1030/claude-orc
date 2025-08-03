@@ -18,20 +18,30 @@ from typing import List, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.tmux_manager import TmuxManager
-from src.agent_state_monitor import AgentStateMonitor
+from src.agent_state_monitor import AgentStateMonitor, AnomalyHistoryConfig
 
 
 class LiveStateMonitor:
     """Live monitoring of agent states"""
     
-    def __init__(self, session_name: str):
+    def __init__(self, session_name: str, continuous_anomaly_recording: bool = False):
         self.session_name = session_name
         self.tmux = TmuxManager(session_name)
-        self.monitor = AgentStateMonitor(self.tmux)
+        
+        # Configure anomaly history for continuous recording
+        anomaly_config = AnomalyHistoryConfig(
+            max_records_per_agent=5000,  # Higher limit for monitoring sessions
+            max_total_records=20000,
+            retention_hours=12.0  # Keep anomalies for the session duration
+        )
+        self.monitor = AgentStateMonitor(self.tmux, anomaly_config)
+        
         self.history: List[Dict[str, Any]] = []
         self.max_history = 100
+        self.continuous_anomaly_recording = continuous_anomaly_recording
         self.anomalies_detected = False
-        self.anomaly_data = {}
+        self.anomaly_data = {}  # Still used for backward compatibility
+        self.monitoring_start_time = time.time()
         
     def get_current_states(self) -> Dict[str, Any]:
         """Get current state of all agents"""
@@ -50,17 +60,27 @@ class LiveStateMonitor:
             full_content = self.tmux.capture_pane(i, history_limit=-50)
             anomalies = self.monitor.detect_ui_anomalies(full_content) if full_content else []
             
-            # If anomalies found, capture them
+            # Record anomalies in the new system
+            if anomalies and self.monitor.anomaly_monitoring_enabled:
+                self.monitor.anomaly_history.record_anomalies(
+                    agent_name=f"Agent{i}",
+                    anomalies=anomalies,
+                    pane_state=state.value
+                )
+            
+            # If anomalies found, capture them (for backward compatibility)
             if anomalies:
                 if not self.anomalies_detected:
                     self.anomalies_detected = True
-                if f"Agent{i}" not in self.anomaly_data:
-                    self.anomaly_data[f"Agent{i}"] = {
-                        "pane_index": i,
-                        "anomalies": anomalies,
-                        "full_content": full_content,
-                        "timestamp": datetime.now()
-                    }
+                # In continuous mode, we don't exit on first anomaly
+                if not self.continuous_anomaly_recording:
+                    if f"Agent{i}" not in self.anomaly_data:
+                        self.anomaly_data[f"Agent{i}"] = {
+                            "pane_index": i,
+                            "anomalies": anomalies,
+                            "full_content": full_content,
+                            "timestamp": datetime.now()
+                        }
             
             # Check for processing indicators
             processing_indicator = None
@@ -126,6 +146,41 @@ class LiveStateMonitor:
             print(f"  {agent_name}: {len(data['anomalies'])} anomaly(ies)")
             for i, anomaly in enumerate(data['anomalies']):
                 print(f"    - {anomaly['content'][:60]}...")
+    
+    def save_anomaly_report(self, format='text'):
+        """Save comprehensive anomaly report from continuous monitoring"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Generate report
+        report = self.monitor.anomaly_history.export_report(
+            output_format=format,
+            start_time=self.monitoring_start_time
+        )
+        
+        # Save to file
+        ext = {'json': 'json', 'csv': 'csv', 'text': 'txt'}[format]
+        filename = f".temp/anomaly_report_{timestamp}.{ext}"
+        
+        with open(filename, 'w') as f:
+            f.write(report)
+        
+        print(f"\nAnomaly report saved to: {filename}")
+        
+        # Print summary
+        summary = self.monitor.anomaly_history.get_summary()
+        print(f"\nMonitoring Summary:")
+        print(f"  Total anomalies recorded: {summary['total_records']}")
+        print(f"  Monitoring duration: {(time.time() - self.monitoring_start_time) / 60:.1f} minutes")
+        
+        if summary['by_type']:
+            print("\nAnomalies by type:")
+            for atype, count in summary['by_type'].items():
+                print(f"    {atype}: {count}")
+        
+        if summary['by_agent']:
+            print("\nAnomalies by agent:")
+            for agent, count in summary['by_agent'].items():
+                print(f"    {agent}: {count}")
         
     def run_curses(self, stdscr):
         """Run the monitor with curses interface"""
@@ -217,14 +272,20 @@ class LiveStateMonitor:
                     row += 2
                 
                 # Check if anomalies detected
-                if self.anomalies_detected:
-                    # Clear and show anomaly message
+                if self.anomalies_detected and not self.continuous_anomaly_recording:
+                    # In non-continuous mode, exit on first anomaly
                     stdscr.clear()
                     stdscr.addstr(0, 0, "ANOMALIES DETECTED!", curses.color_pair(3) | curses.A_BOLD)
                     stdscr.addstr(2, 0, "Saving anomaly data and exiting...")
                     stdscr.refresh()
                     time.sleep(1)
                     running = False
+                elif self.anomalies_detected and self.continuous_anomaly_recording:
+                    # In continuous mode, show indicator but keep running
+                    anomaly_summary = self.monitor.anomaly_history.get_summary()
+                    total_anomalies = anomaly_summary['total_records']
+                    stdscr.addstr(height - 6, 0, f"Total anomalies recorded: {total_anomalies}", 
+                                 curses.color_pair(3) | curses.A_BOLD)
                 
                 # State transition history
                 if len(self.history) > 1:
@@ -303,10 +364,15 @@ class LiveStateMonitor:
                     print()
                 
                 # Check if anomalies detected
-                if self.anomalies_detected:
+                if self.anomalies_detected and not self.continuous_anomaly_recording:
                     print("\n*** ANOMALIES DETECTED! ***")
                     print("Saving anomaly data and exiting...")
                     break
+                elif self.anomalies_detected and self.continuous_anomaly_recording:
+                    # Show anomaly count in continuous mode
+                    anomaly_summary = self.monitor.anomaly_history.get_summary()
+                    total_anomalies = anomaly_summary['total_records']
+                    print(f"\nTotal anomalies recorded: {total_anomalies}")
                 
                 time.sleep(interval)
                 
@@ -323,28 +389,37 @@ def main():
                        help="Monitoring duration in seconds (default: 300)")
     parser.add_argument("--interval", type=float, default=0.5,
                        help="Update interval in seconds (default: 0.5)")
+    parser.add_argument("--continuous-anomaly-recording", action="store_true",
+                       help="Continue monitoring and recording all anomalies (don't exit on first anomaly)")
+    parser.add_argument("--anomaly-report-format", choices=['text', 'json', 'csv'],
+                       default='text', help="Format for anomaly report (default: text)")
     
     args = parser.parse_args()
     
-    monitor = LiveStateMonitor(args.session)
+    monitor = LiveStateMonitor(args.session, args.continuous_anomaly_recording)
     
     if args.simple:
         monitor.run_simple(args.duration, args.interval)
-        if monitor.anomalies_detected:
-            monitor.save_anomalies()
     else:
         # Run with curses
         try:
             update_count = curses.wrapper(monitor.run_curses)
             print(f"\nMonitoring completed. Total updates: {update_count}")
-            if monitor.anomalies_detected:
-                monitor.save_anomalies()
         except Exception as e:
             print(f"Error running curses interface: {e}")
             print("Falling back to simple mode...")
             monitor.run_simple(args.duration, args.interval)
-            if monitor.anomalies_detected:
-                monitor.save_anomalies()
+    
+    # Save results
+    if monitor.continuous_anomaly_recording:
+        # In continuous mode, only save report if anomalies were detected
+        if monitor.anomalies_detected:
+            monitor.save_anomaly_report(args.anomaly_report_format)
+        else:
+            print("\nNo anomalies detected during monitoring - no report file created.")
+    elif monitor.anomalies_detected:
+        # In non-continuous mode, save the old-style snapshot
+        monitor.save_anomalies()
             
 
 if __name__ == "__main__":

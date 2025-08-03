@@ -1,5 +1,150 @@
 # Troubleshooting Guide
 
+## Agent State Monitoring Issues
+
+### Continuous Anomaly Recording Problems
+
+#### High Memory Usage During Monitoring
+**Symptoms:**
+- System memory consumption increases significantly during monitoring
+- Out of memory errors during extended monitoring sessions
+- Slow system performance while monitoring runs
+
+**Diagnostic Steps:**
+```bash
+# Check current memory usage
+ps aux | grep monitor_live_states
+free -h
+
+# Monitor memory growth during session
+top -p $(pgrep -f monitor_live_states)
+```
+
+**Solutions:**
+1. **Reduce record limits:**
+```python
+# Configure lower limits
+anomaly_config = AnomalyHistoryConfig(
+    max_records_per_agent=1000,    # Default: 5000
+    max_total_records=5000,        # Default: 20000
+    retention_hours=6.0            # Default: 12.0
+)
+```
+
+2. **Use shorter monitoring duration:**
+```bash
+# Reduce session length
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --duration 1800  # 30 min instead of longer
+```
+
+3. **Enable simple mode:**
+```bash
+# Lower overhead with simple mode
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --simple
+```
+
+#### Anomaly Reports Not Generated
+**Symptoms:**
+- Monitoring completes but no report file created
+- Empty or incomplete anomaly reports
+- Report files created but contain no data
+
+**Diagnostic Steps:**
+```bash
+# Check .temp directory permissions
+ls -la .temp/
+touch .temp/test_file
+
+# Verify anomaly detection is working
+python scripts/diagnose_agent_states.py session-name --single
+
+# Check for Python exceptions during monitoring
+python scripts/monitor_live_states.py session-name --continuous-anomaly-recording 2>&1 | tee monitor.log
+```
+
+**Solutions:**
+1. **Ensure .temp directory exists:**
+```bash
+mkdir -p .temp
+chmod 755 .temp
+```
+
+2. **Force report generation:**
+```bash
+# Try different format that might work
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --anomaly-report-format json
+```
+
+3. **Check for anomalies manually:**
+```bash
+# Verify agents are actually producing anomalies
+python scripts/diagnose_agent_states.py session-name --duration 60
+```
+
+#### Text Format Display Issues
+**Symptoms:**
+- Garbled text in anomaly reports
+- Missing line breaks or formatting problems
+- Special characters not displaying correctly
+
+**Known Issue:** Text format has minor display formatting problems
+
+**Solutions:**
+1. **Use JSON format instead:**
+```bash
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --anomaly-report-format json
+```
+
+2. **Use CSV format for analysis:**
+```bash
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --anomaly-report-format csv
+```
+
+3. **Manual formatting cleanup:**
+```bash
+# Post-process text reports if needed
+sed 's/\r//g' .temp/anomaly_report_*.txt > cleaned_report.txt
+```
+
+#### Missing Anomalies in Reports
+**Symptoms:**
+- Agents showing anomalies in UI but not captured in reports
+- Inconsistent anomaly detection between sessions
+- Expected anomalies not appearing in final report
+
+**Diagnostic Steps:**
+```bash
+# Increase monitoring frequency
+python scripts/monitor_live_states.py session --continuous-anomaly-recording --interval 0.2
+
+# Check agent state detection manually
+python scripts/diagnose_agent_states.py session-name --single --verbose
+
+# Verify tmux session health
+tmux list-sessions
+tmux capture-pane -t session-name:0 -p
+```
+
+**Solutions:**
+1. **Increase monitoring frequency:**
+```bash
+# Check more frequently for brief anomalies
+--interval 0.2  # Instead of default 0.5
+```
+
+2. **Verify UI patterns:**
+```bash
+# Check if agent UI matches expected patterns
+python scripts/diagnose_agent_states.py session-name --duration 60
+```
+
+3. **Check tmux configuration:**
+```bash
+# Ensure tmux scrollback is sufficient
+tmux show-options -g history-limit
+# Should be at least 2000
+```
+
 ## Common Issues and Solutions
 
 ### 1. Claude Not Starting

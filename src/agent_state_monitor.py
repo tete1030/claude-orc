@@ -5,7 +5,9 @@ Agent State Monitor - Tracks agent busy/idle states and handles message delivery
 import re
 import time
 import logging
-from typing import Dict, Optional, List, Tuple
+import json
+from datetime import datetime
+from typing import Dict, Optional, List, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
@@ -31,6 +33,232 @@ class AgentStatus:
     last_activity: Optional[str] = None
     pending_messages: deque = field(default_factory=deque)
     messages_sent_while_busy: int = 0
+
+
+@dataclass
+class AnomalyRecord:
+    """Individual anomaly record with metadata"""
+    timestamp: float
+    agent_name: str
+    anomaly_type: str
+    line_num: int
+    content: str
+    context: List[str]
+    pane_state: Optional[str] = None
+    
+    def to_dict(self) -> dict:
+        return {
+            'timestamp': self.timestamp,
+            'datetime': datetime.fromtimestamp(self.timestamp).isoformat(),
+            'agent_name': self.agent_name,
+            'anomaly_type': self.anomaly_type,
+            'line_num': self.line_num,
+            'content': self.content,
+            'context': self.context,
+            'pane_state': self.pane_state
+        }
+
+
+@dataclass 
+class AnomalyHistoryConfig:
+    """Configuration for anomaly history tracking"""
+    max_records_per_agent: int = 1000
+    max_total_records: int = 5000
+    retention_hours: float = 24.0
+    enable_persistence: bool = False
+    persistence_path: Optional[str] = None
+
+
+class AnomalyHistory:
+    """Manages historical anomaly records"""
+    
+    def __init__(self, config: AnomalyHistoryConfig = None):
+        self.config = config or AnomalyHistoryConfig()
+        self.history: Dict[str, deque] = {}
+        self._total_records = 0
+        
+    def record_anomalies(self, agent_name: str, anomalies: List[dict], 
+                        pane_state: Optional[str] = None) -> None:
+        """Record new anomalies for an agent"""
+        if agent_name not in self.history:
+            self.history[agent_name] = deque(maxlen=self.config.max_records_per_agent)
+            
+        timestamp = time.time()
+        
+        for anomaly in anomalies:
+            anomaly_type = self._classify_anomaly_type(anomaly['content'])
+            
+            record = AnomalyRecord(
+                timestamp=timestamp,
+                agent_name=agent_name,
+                anomaly_type=anomaly_type,
+                line_num=anomaly['line_num'],
+                content=anomaly['content'],
+                context=anomaly.get('context', []),
+                pane_state=pane_state
+            )
+            
+            self.history[agent_name].append(record)
+            self._total_records += 1
+            
+        self._apply_retention()
+        
+    def _classify_anomaly_type(self, content: str) -> str:
+        """Classify anomaly type based on content"""
+        if "Multiple input boxes" in content:
+            return "multiple_input_boxes"
+        elif "Incomplete prompt box" in content:
+            return "incomplete_box"
+        elif "Unrecognized box type" in content:
+            return "unknown_box_type"
+        elif "Too many prompt boxes" in content:
+            return "too_many_boxes"
+        else:
+            return "other"
+            
+    def _apply_retention(self) -> None:
+        """Apply retention policies to limit history size"""
+        current_time = time.time()
+        cutoff_time = current_time - (self.config.retention_hours * 3600)
+        
+        # Remove old records
+        for agent_name, records in self.history.items():
+            while records and records[0].timestamp < cutoff_time:
+                records.popleft()
+                self._total_records -= 1
+                
+        # Apply total size limit
+        if self._total_records > self.config.max_total_records:
+            all_records = []
+            for agent_name, records in self.history.items():
+                all_records.extend([(r.timestamp, agent_name) for r in records])
+            
+            all_records.sort()
+            to_remove = self._total_records - self.config.max_total_records
+            
+            for _, agent_name in all_records[:to_remove]:
+                if self.history[agent_name]:
+                    self.history[agent_name].popleft()
+                    self._total_records -= 1
+                    
+    def query_history(self, agent_name: Optional[str] = None,
+                     anomaly_type: Optional[str] = None,
+                     start_time: Optional[float] = None,
+                     end_time: Optional[float] = None,
+                     limit: int = 100) -> List[AnomalyRecord]:
+        """Query anomaly history with filters"""
+        results = []
+        
+        if agent_name:
+            agents = [agent_name] if agent_name in self.history else []
+        else:
+            agents = list(self.history.keys())
+            
+        for agent in agents:
+            for record in self.history[agent]:
+                if anomaly_type and record.anomaly_type != anomaly_type:
+                    continue
+                if start_time and record.timestamp < start_time:
+                    continue
+                if end_time and record.timestamp > end_time:
+                    continue
+                    
+                results.append(record)
+                
+                if len(results) >= limit:
+                    return results
+                    
+        return results
+        
+    def get_summary(self, agent_name: Optional[str] = None) -> Dict[str, Any]:
+        """Get summary statistics of anomalies"""
+        summary = {
+            'total_records': 0,
+            'by_type': {},
+            'by_agent': {},
+            'oldest_record': None,
+            'newest_record': None
+        }
+        
+        agents = [agent_name] if agent_name else list(self.history.keys())
+        
+        for agent in agents:
+            if agent not in self.history:
+                continue
+                
+            agent_records = list(self.history[agent])
+            if not agent_records:
+                continue
+                
+            summary['by_agent'][agent] = len(agent_records)
+            summary['total_records'] += len(agent_records)
+            
+            for record in agent_records:
+                anomaly_type = record.anomaly_type
+                summary['by_type'][anomaly_type] = summary['by_type'].get(anomaly_type, 0) + 1
+                
+                if not summary['oldest_record'] or record.timestamp < summary['oldest_record']:
+                    summary['oldest_record'] = record.timestamp
+                if not summary['newest_record'] or record.timestamp > summary['newest_record']:
+                    summary['newest_record'] = record.timestamp
+                    
+        return summary
+        
+    def export_report(self, output_format: str = 'json',
+                     agent_name: Optional[str] = None,
+                     start_time: Optional[float] = None,
+                     end_time: Optional[float] = None) -> str:
+        """Export anomaly report in specified format"""
+        records = self.query_history(
+            agent_name=agent_name,
+            start_time=start_time,
+            end_time=end_time,
+            limit=10000
+        )
+        
+        if output_format == 'json':
+            return json.dumps({
+                'summary': self.get_summary(agent_name),
+                'records': [r.to_dict() for r in records]
+            }, indent=2)
+        elif output_format == 'csv':
+            lines = ['timestamp,datetime,agent_name,anomaly_type,line_num,content']
+            for record in records:
+                lines.append(f"{record.timestamp},{datetime.fromtimestamp(record.timestamp).isoformat()},"
+                           f"{record.agent_name},{record.anomaly_type},{record.line_num},"
+                           f'"{record.content}"')
+            return '\n'.join(lines)
+        elif output_format == 'text':
+            lines = [f"Anomaly Report - Generated at {datetime.now().isoformat()}"]
+            lines.append("=" * 60)
+            
+            summary = self.get_summary(agent_name)
+            lines.append(f"Total Records: {summary['total_records']}")
+            lines.append(f"Date Range: {datetime.fromtimestamp(summary['oldest_record']).isoformat() if summary['oldest_record'] else 'N/A'} to "
+                        f"{datetime.fromtimestamp(summary['newest_record']).isoformat() if summary['newest_record'] else 'N/A'}")
+            lines.append("\nAnomalies by Type:")
+            for atype, count in summary['by_type'].items():
+                lines.append(f"  {atype}: {count}")
+            lines.append("\nAnomalies by Agent:")
+            for agent, count in summary['by_agent'].items():
+                lines.append(f"  {agent}: {count}")
+                
+            lines.append("\n" + "=" * 60)
+            lines.append("Detailed Records:")
+            lines.append("=" * 60)
+            
+            for record in records:
+                lines.append(f"\n[{datetime.fromtimestamp(record.timestamp).isoformat()}] "
+                           f"{record.agent_name} - {record.anomaly_type}")
+                lines.append(f"  Line {record.line_num}: {record.content}")
+                if record.context:
+                    lines.append("  Context:")
+                    for ctx_line in record.context[:3]:
+                        lines.append(f"    {ctx_line}")
+                        
+            return '\n'.join(lines)
+        else:
+            raise ValueError(f"Unsupported format: {output_format}")
     
 
 class AgentStateMonitor:
@@ -85,10 +313,14 @@ class AgentStateMonitor:
         r"Claude Code v\d+\.\d+",
     ]
     
-    def __init__(self, tmux_manager):
+    def __init__(self, tmux_manager, anomaly_history_config: Optional[AnomalyHistoryConfig] = None):
         self.tmux = tmux_manager
         self.logger = logging.getLogger(__name__)
         self.agent_states: Dict[str, AgentStatus] = {}
+        
+        # Initialize anomaly history
+        self.anomaly_history = AnomalyHistory(anomaly_history_config)
+        self.anomaly_monitoring_enabled = True
         
     def detect_agent_state(self, pane_content: str, agent_name: str = None) -> AgentState:
         """Detect agent state from pane content with initialization handling"""
@@ -277,6 +509,47 @@ class AgentStateMonitor:
         # Don't make assumptions during initialization
         return AgentState.UNKNOWN
     
+    def _classify_box_type(self, lines: List[str], box: dict) -> str:
+        """
+        Classify a box based on its content.
+        Returns: 'welcome', 'input', 'message', 'unknown'
+        """
+        # Extract box content
+        box_content = []
+        for idx in box['middle']:
+            if idx < len(lines):
+                # Remove box borders
+                content = lines[idx].strip()
+                if content.startswith('│') and content.endswith('│'):
+                    content = content[1:-1].strip()
+                box_content.append(content)
+        
+        # Join all content
+        full_content = ' '.join(box_content)
+        
+        # Classification rules
+        if 'Welcome to Claude Code' in full_content:
+            return 'welcome'
+        elif re.search(r'^\s*>\s*', full_content):
+            # Any input box with > prompt (includes empty prompt, commands, and typing)
+            return 'input'
+        elif 'MESSAGE' in full_content or 'message' in full_content:
+            return 'message'
+        elif any(keyword in full_content for keyword in ['Tip:', 'Note:', 'Warning:', 'Error:']):
+            return 'info'
+        elif 'Permissions:' in full_content and ('Allow' in full_content or 'Deny' in full_content):
+            return 'dialog'  # Permissions dialog
+        elif any(keyword in full_content for keyword in [
+            'Settings', 'Configure Claude Code',
+            'Agents', 'Create new agent', 
+            'Hook Configuration', 'Select Model'
+        ]):
+            return 'dialog'  # Other dialog types
+        elif len(full_content.strip()) == 0:
+            return 'empty'
+        else:
+            return 'unknown'
+    
     def detect_ui_anomalies(self, pane_content: str) -> list:
         """
         Detect structural anomalies in UI layout.
@@ -298,7 +571,7 @@ class AgentStateMonitor:
         i = 0
         while i < len(lines):
             if re.match(PROMPT_BOX_TOP, lines[i]):
-                box = {'top': i, 'middle': [], 'bottom': None}
+                box = {'top': i, 'middle': [], 'bottom': None, 'type': None}
                 i += 1
                 
                 # Find middle and bottom
@@ -313,25 +586,80 @@ class AgentStateMonitor:
                         break
                 
                 if box['bottom'] is not None:
+                    # Classify the box type
+                    box['type'] = self._classify_box_type(lines, box)
                     prompt_boxes.append(box)
                 else:
-                    # Incomplete box is an anomaly
-                    anomalies.append({
-                        'line_num': box['top'],
-                        'content': f"Incomplete prompt box starting at line {box['top']}",
-                        'context': lines[box['top']:min(len(lines), box['top']+5)]
-                    })
+                    # Check if this is a dialog/menu box (which often don't have bottom borders)
+                    # Extract content to check if it's a dialog
+                    box_content = []
+                    for idx in box['middle']:
+                        if idx < len(lines):
+                            content = lines[idx].strip()
+                            if content.startswith('│') and content.endswith('│'):
+                                content = content[1:-1].strip()
+                            box_content.append(content)
+                    
+                    full_content = ' '.join(box_content)
+                    
+                    # Check if it's a known dialog type (these normally don't have bottom borders)
+                    dialog_keywords = [
+                        'Settings', 'Configure Claude Code',
+                        'Agents', 'Create new agent',
+                        'Hook Configuration', 'Hooks are shell commands',
+                        'Select Model', 'Switch between Claude models'
+                    ]
+                    
+                    is_dialog = any(keyword in full_content for keyword in dialog_keywords)
+                    
+                    if not is_dialog:
+                        # Only flag as anomaly if it's not a known dialog type
+                        anomalies.append({
+                            'line_num': box['top'],
+                            'content': f"Incomplete prompt box starting at line {box['top']}",
+                            'context': lines[box['top']:min(len(lines), box['top']+5)]
+                        })
             i += 1
         
-        # Check for structural anomalies
+        # Check for structural anomalies based on box types
         
-        # 1. Multiple prompt boxes (unusual)
-        if len(prompt_boxes) > 1:
-            anomalies.append({
-                'line_num': prompt_boxes[1]['top'],
-                'content': f"Multiple prompt boxes detected ({len(prompt_boxes)} found)",
-                'context': []
-            })
+        # Count boxes by type
+        box_types = {}
+        for box in prompt_boxes:
+            box_type = box.get('type', 'unknown')
+            box_types[box_type] = box_types.get(box_type, 0) + 1
+        
+        # Anomaly rules based on box types
+        # 1. Multiple input boxes (should only have one)
+        if box_types.get('input', 0) > 1:
+            # Find the second input box
+            input_count = 0
+            for box in prompt_boxes:
+                if box['type'] == 'input':
+                    input_count += 1
+                    if input_count == 2:
+                        anomalies.append({
+                            'line_num': box['top'],
+                            'content': f"Multiple input boxes detected ({box_types['input']} found)",
+                            'context': []
+                        })
+                        break
+        
+        # 2. Unknown box types might indicate UI issues
+        if box_types.get('unknown', 0) > 0:
+            for box in prompt_boxes:
+                if box['type'] == 'unknown':
+                    anomalies.append({
+                        'line_num': box['top'],
+                        'content': f"Unrecognized box type",
+                        'context': lines[box['top']:box['bottom']+1] if box['bottom'] else []
+                    })
+                    break  # Only report first unknown
+        
+        # Normal scenarios (not anomalies):
+        # - One welcome box + one input box
+        # - Message boxes (any number)
+        # - Info boxes (any number)
         
         # 2. No prompt box (might be initializing or error state)
         # Don't flag as anomaly since this is common during initialization
@@ -416,7 +744,7 @@ class AgentStateMonitor:
         # Detect UI anomalies first
         anomalies = self.detect_ui_anomalies(content)
         if anomalies:
-            self.logger.warning(f"UI anomalies detected for {agent_name}: {len(anomalies)} anomaly(ies)")
+            self.logger.debug(f"UI anomalies detected for {agent_name}: {len(anomalies)} anomaly(ies)")
             # Log first few anomalies for debugging
             for i, anomaly in enumerate(anomalies[:3]):
                 self.logger.debug(
@@ -428,7 +756,7 @@ class AgentStateMonitor:
         
         # Extra warning if state is UNKNOWN with anomalies
         if anomalies and state == AgentState.UNKNOWN:
-            self.logger.warning(
+            self.logger.debug(
                 f"Agent {agent_name} has UNKNOWN state with UI anomalies. "
                 "Claude UI may have changed. Review anomalies for detection updates."
             )
