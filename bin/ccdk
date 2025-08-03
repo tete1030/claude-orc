@@ -358,7 +358,7 @@ start_container() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=${TERM:-xterm-256color} \
+        -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -468,7 +468,7 @@ run_temporary() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=${TERM:-xterm-256color} \
+        -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -507,7 +507,7 @@ run_shell() {
         -e LOCAL_USER_HOME=$HOME \
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
-        -e TERM=${TERM:-xterm-256color} \
+        -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
         $env_args \
         $volume_args \
         $custom_mounts \
