@@ -57,6 +57,8 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     redis-tools \
     bc \
+    # File system monitoring
+    inotify-tools \
     # Database tools
     sqlite3 \
     # Performance monitoring
@@ -188,8 +190,13 @@ COPY bin/dkcc /usr/local/bin/dkcc
 RUN chmod +x /usr/local/bin/dkcc
 
 # Copy entrypoint script
+# Copy container scripts
 COPY docker/claude-code/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY docker/claude-code/session-monitor-daemon.sh /usr/local/bin/session-monitor-daemon.sh
+COPY docker/claude-code/run-command.sh /usr/local/bin/run-command.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/session-monitor-daemon.sh \
+    && chmod +x /usr/local/bin/run-command.sh
 
 # Expose common ports
 EXPOSE 8000 8080 3000 5000 5001

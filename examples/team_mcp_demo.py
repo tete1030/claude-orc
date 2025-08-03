@@ -7,9 +7,11 @@ This example shows:
 - Pure MCP tool-based communication
 - Minimal orchestrator for MCP-only operation
 - Team collaboration: Leader, Researcher, and Writer agents
+- Session persistence support
 """
 
 import sys
+import os
 import asyncio
 import logging
 import threading
@@ -22,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.orchestrator import Orchestrator, OrchestratorConfig
 from src.mcp_central_server import CentralMCPServer
+from src.session_manager import SessionManager, AgentInfo
 
 
 # Team member prompts
@@ -94,6 +97,10 @@ def main():
                        help="Force kill existing tmux session if it exists")
     parser.add_argument("--session", type=str, default="team-mcp-demo",
                        help="Tmux session name (default: team-mcp-demo)")
+    parser.add_argument("--session-name", type=str,
+                       help="Name for this team session (for container tracking)")
+    parser.add_argument("--resume", action="store_true",
+                       help="Resume an existing session with persistent containers")
     args = parser.parse_args()
     
     # Set up logging
@@ -101,6 +108,25 @@ def main():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    
+    # Initialize session manager
+    session_manager = SessionManager()
+    team_session = None
+    
+    # Handle session resume or creation
+    if args.resume and args.session_name:
+        print(f"Resuming session: {args.session_name}")
+        try:
+            team_session = session_manager.resume_session(args.session_name)
+            # Override settings from saved session
+            args.session = team_session.tmux_session
+            print(f"Resumed session with tmux: {args.session}")
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
+    elif args.resume and not args.session_name:
+        print("ERROR: --resume requires --session-name")
+        sys.exit(1)
     
     # Create orchestrator config
     config = OrchestratorConfig(
@@ -111,6 +137,17 @@ def main():
     # Create orchestrator
     orchestrator = Orchestrator(config)
     
+    # Override launcher to set container names if session provided
+    if args.session_name:
+        from src.claude_launcher_config import ClaudeLauncherConfig
+        original_build = ClaudeLauncherConfig.build_command_string
+        def patched_build(agent_name, session_id, system_prompt, mcp_config_path=None):
+            # Set container name based on session
+            container_suffix = agent_name.lower().replace(" ", "-")
+            os.environ['CLAUDE_INSTANCE'] = f"{args.session_name}-{container_suffix}"
+            return original_build(agent_name, session_id, system_prompt, mcp_config_path)
+        ClaudeLauncherConfig.build_command_string = patched_build
+    
     # Override create_session method to use force parameter
     original_create_session = orchestrator.tmux.create_session
     def create_session_with_force(num_panes, force=None):
@@ -120,21 +157,29 @@ def main():
     orchestrator.tmux.create_session = create_session_with_force
     
     # Register team members
+    # Update session IDs if using named session
+    leader_id = f"{args.session_name}-leader" if args.session_name else "leader-01"
+    researcher_id = f"{args.session_name}-researcher" if args.session_name else "researcher-01"
+    writer_id = f"{args.session_name}-writer" if args.session_name else "writer-01"
+    
+    # Container mode always isolated for this demo
+    os.environ['CLAUDE_CONTAINER_MODE'] = 'isolated'
+    
     orchestrator.register_agent(
         name="Leader",
-        session_id="leader-01",
+        session_id=leader_id,
         system_prompt=LEADER_PROMPT
     )
     
     orchestrator.register_agent(
         name="Researcher",
-        session_id="researcher-01",
+        session_id=researcher_id,
         system_prompt=RESEARCHER_PROMPT
     )
     
     orchestrator.register_agent(
         name="Writer",
-        session_id="writer-01",
+        session_id=writer_id,
         system_prompt=WRITER_PROMPT
     )
     
@@ -164,12 +209,51 @@ def main():
     
     try:
         if orchestrator.start(mcp_port=mcp_port):
+            # Register session if session name provided and not resuming
+            if args.session_name and not args.resume:
+                # Build agent info list
+                container_prefix = "ccbox-" + args.session_name
+                agents_info = [
+                    AgentInfo(
+                        name="Leader",
+                        container=f"{container_prefix}-leader",
+                        model="sonnet",
+                        container_mode="isolated"
+                    ),
+                    AgentInfo(
+                        name="Researcher",
+                        container=f"{container_prefix}-researcher",
+                        model="sonnet",
+                        container_mode="isolated"
+                    ),
+                    AgentInfo(
+                        name="Writer",
+                        container=f"{container_prefix}-writer",
+                        model="sonnet",
+                        container_mode="isolated"
+                    )
+                ]
+                
+                # Create session in registry
+                team_session = session_manager.create_session(
+                    session_name=args.session_name,
+                    agents=agents_info,
+                    tmux_session=args.session,
+                    orchestrator_config={
+                        "poll_interval": config.poll_interval,
+                        "mcp_port": mcp_port
+                    }
+                )
+                print(f"\n✓ Session '{args.session_name}' registered with {len(agents_info)} agents")
+            
             print(f"\n✓ Orchestrator started successfully!")
             print(f"✓ MCP server running on port {mcp_port}")
             print(f"✓ 3 agents: Leader, Researcher, Writer")
+            if args.session_name:
+                print(f"✓ Session: {args.session_name}")
             
-            print(f"\nTmux session: {config.session_name}")
-            print(f"Attach with: tmux attach -t {config.session_name}")
+            print(f"\nTmux session: {args.session}")
+            print(f"Attach with: tmux attach -t {args.session}")
             
             print("\nAgent Team:")
             print("  • Leader - Coordinates the team")

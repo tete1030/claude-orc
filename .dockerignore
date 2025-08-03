@@ -1,10 +1,12 @@
 # Ignore everything
 *
 
-# Only include the three files we need
+# Only include the files we need
 !bin/
 !bin/claude-bg
 !bin/dkcc
 !docker/
 !docker/claude-code/
 !docker/claude-code/entrypoint.sh
+!docker/claude-code/session-monitor-daemon.sh
+!docker/claude-code/run-command.sh

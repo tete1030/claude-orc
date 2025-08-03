@@ -11,6 +11,7 @@ Features:
 """
 
 import sys
+import os
 import asyncio
 import logging
 import threading
@@ -28,6 +29,7 @@ from src.orchestrator_enhanced import EnhancedOrchestrator
 from src.orchestrator import OrchestratorConfig
 from src.mcp_central_server import CentralMCPServer
 from src.claude_launcher_config import ClaudeLauncherConfig
+from src.session_manager import SessionManager, AgentInfo
 
 
 # Team member prompts - Updated to NOT tell agents to check messages regularly
@@ -143,6 +145,10 @@ def main():
                        help="Force kill existing tmux session if it exists")
     parser.add_argument("--session", type=str, default="team-mcp-demo",
                        help="Tmux session name (default: team-mcp-demo)")
+    parser.add_argument("--session-name", type=str,
+                       help="Name for this team session (for container tracking)")
+    parser.add_argument("--resume", action="store_true",
+                       help="Resume an existing session with persistent containers")
     args = parser.parse_args()
     
     # Set up logging
@@ -151,6 +157,25 @@ def main():
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    
+    # Initialize session manager
+    session_manager = SessionManager()
+    team_session = None
+    
+    # Handle session resume or creation
+    if args.resume and args.session_name:
+        print(f"Resuming session: {args.session_name}")
+        try:
+            team_session = session_manager.resume_session(args.session_name)
+            # Override settings from saved session
+            args.session = team_session.tmux_session
+            print(f"Resumed session with tmux: {args.session}")
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
+    elif args.resume and not args.session_name:
+        print("ERROR: --resume requires --session-name")
+        sys.exit(1)
     
     # Variables for cleanup
     orchestrator = None
@@ -192,6 +217,11 @@ def main():
     # Override the launcher config
     original_build = ClaudeLauncherConfig.build_command_string
     def patched_build(agent_name, session_id, system_prompt, mcp_config_path=None):
+        # Set container name based on session if provided
+        if args.session_name:
+            container_suffix = agent_name.lower().replace(" ", "-")
+            os.environ['CLAUDE_INSTANCE'] = f"{args.session_name}-{container_suffix}"
+        
         return EnhancedClaudeLauncherConfig.build_command_string(
             agent_name, session_id, system_prompt, mcp_config_path,
             model=args.model, debug=args.debug
@@ -216,21 +246,26 @@ def main():
     orchestrator.tmux.create_session = create_session_with_force
     
     # Register team members
+    # Update session IDs if using named session
+    leader_id = f"{args.session_name}-leader" if args.session_name else "leader-mcp"
+    researcher_id = f"{args.session_name}-researcher" if args.session_name else "researcher-mcp"
+    writer_id = f"{args.session_name}-writer" if args.session_name else "writer-mcp"
+    
     orchestrator.register_agent(
         name="Leader",
-        session_id="leader-mcp",
+        session_id=leader_id,
         system_prompt=LEADER_PROMPT
     )
     
     orchestrator.register_agent(
         name="Researcher", 
-        session_id="researcher-mcp",
+        session_id=researcher_id,
         system_prompt=RESEARCHER_PROMPT
     )
     
     orchestrator.register_agent(
         name="Writer",
-        session_id="writer-mcp", 
+        session_id=writer_id, 
         system_prompt=WRITER_PROMPT
     )
     
@@ -293,6 +328,45 @@ Enhanced Team MCP Demo - Collaborative AI Agents
     
     # Start orchestrator
     if orchestrator.start(mcp_port=actual_port):
+        # Register session if session name provided and not resuming
+        if args.session_name and not args.resume:
+            # Build agent info list for basic demo
+            container_prefix = "ccbox-" + args.session_name
+            agents_info = [
+                AgentInfo(
+                    name="Leader",
+                    container=f"{container_prefix}-leader",
+                    model=args.model,
+                    container_mode="isolated"
+                ),
+                AgentInfo(
+                    name="Researcher",
+                    container=f"{container_prefix}-researcher",
+                    model=args.model,
+                    container_mode="isolated"
+                ),
+                AgentInfo(
+                    name="Writer",
+                    container=f"{container_prefix}-writer",
+                    model=args.model,
+                    container_mode="isolated"
+                )
+            ]
+            
+            # Create session in registry
+            team_session = session_manager.create_session(
+                session_name=args.session_name,
+                agents=agents_info,
+                tmux_session=args.session,
+                orchestrator_config={
+                    "poll_interval": config.poll_interval,
+                    "mcp_port": actual_port,
+                    "debug": args.debug,
+                    "model": args.model
+                }
+            )
+            print(f"\n✓ Session '{args.session_name}' registered with {len(agents_info)} agents")
+        
         print(f"""
 ✓ Enhanced orchestrator started successfully!
 ✓ MCP server running on port {actual_port}
@@ -300,14 +374,15 @@ Enhanced Team MCP Demo - Collaborative AI Agents
 ✓ Debug mode: {'enabled' if args.debug else 'disabled'}
 ✓ Agent state monitoring: enabled
 ✓ Intelligent message delivery: enabled
+{f"✓ Session: {args.session_name}" if args.session_name else ""}
 
 Team Members:
   • Leader - Coordinates the team
   • Researcher - Finds information  
   • Writer - Creates content
 
-Tmux session: team-mcp-demo
-Attach with: tmux attach -t team-mcp-demo
+Tmux session: {args.session}
+Attach with: tmux attach -t {args.session}
 
 Enhanced Features:
   • Messages are queued when agents are busy

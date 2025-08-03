@@ -253,14 +253,35 @@ build_volume_args() {
     local workspace_path="$1"
     local volume_args=""
     
+    # Ensure .claude directory exists with proper ownership before Docker creates it
+    if [ ! -d "$HOME/.claude" ]; then
+        mkdir -p "$HOME/.claude"
+        echo "Created $HOME/.claude directory with user ownership"
+    fi
+    
+    # Ensure .claude.json exists (can be empty) to prevent Docker creating it as directory
+    if [ ! -e "$HOME/.claude.json" ]; then
+        touch "$HOME/.claude.json"
+        echo "Created $HOME/.claude.json file"
+    fi
+    
     volume_args="$volume_args -v $workspace_path:$workspace_path"
     volume_args="$volume_args -v $HOME/.claude:$HOME/.claude-host/.claude"
     volume_args="$volume_args -v $HOME/.claude.json:$HOME/.claude-host/.claude.json"
-    volume_args="$volume_args -v $HOME/.gitconfig:$HOME/.gitconfig:ro"
-    volume_args="$volume_args -v $HOME/.ssh:$HOME/.ssh:ro"
-    volume_args="$volume_args -v $HOME/.cache/ms-playwright:$HOME/.cache/ms-playwright:cached"
-    volume_args="$volume_args -v /var/run/docker.sock:/var/run/docker.sock"
-    volume_args="$volume_args -v $HOME/.config/gh:$HOME/.config/gh:ro"
+    
+    # Only mount files/directories that exist
+    [ -f "$HOME/.gitconfig" ] && volume_args="$volume_args -v $HOME/.gitconfig:$HOME/.gitconfig:ro"
+    [ -d "$HOME/.ssh" ] && volume_args="$volume_args -v $HOME/.ssh:$HOME/.ssh:ro"
+    [ -d "$HOME/.cache/ms-playwright" ] && volume_args="$volume_args -v $HOME/.cache/ms-playwright:$HOME/.cache/ms-playwright:cached"
+    [ -S "/var/run/docker.sock" ] && volume_args="$volume_args -v /var/run/docker.sock:/var/run/docker.sock"
+    [ -d "$HOME/.config/gh" ] && volume_args="$volume_args -v $HOME/.config/gh:$HOME/.config/gh:ro"
+    
+    # Shared volume for MCP communication - always ensure it exists
+    if [ ! -d "/tmp/claude-orc" ]; then
+        mkdir -p /tmp/claude-orc
+        chmod 777 /tmp/claude-orc
+        echo "Created /tmp/claude-orc for MCP communication"
+    fi
     volume_args="$volume_args -v /tmp/claude-orc:/tmp/claude-orc"
     
     # Mount timezone files if they exist

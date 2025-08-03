@@ -39,14 +39,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### ✅ Production-Ready Features
 - **Robust Multi-Agent Orchestration**: Complete MCP integration with intelligent message routing
 - **Real-Time State Monitoring**: Advanced tmux-based agent state detection with 4-state classification
+- **Session Persistence**: Team sessions survive container restarts and system reboots
 - **Enterprise Docker Support**: Full containerization with isolation and shared communication channels  
 - **Background Process Management**: Production-grade process management with `claude-bg`
-- **Comprehensive Tooling**: Complete CLI toolchain (`dkcc` for Docker, diagnostic scripts, monitoring tools)
+- **Comprehensive Tooling**: Complete CLI toolchain (`dkcc` for Docker, `session-cli` for team sessions, diagnostic scripts, monitoring tools)
 - **Modern Python Stack**: Migrated to Poetry for dependency management and packaging
 
 ### 🎯 Deployment-Ready Components
 - **Core Orchestrator** (`orchestrator.py`) - Battle-tested message routing and agent coordination
 - **Enhanced Orchestrator** (`orchestrator_enhanced.py`) - Advanced state monitoring and intelligent delivery
+- **Session Manager** (`session_manager.py`) - Persistent team session management and registry
 - **MCP Central Server** (`mcp_central_server.py`) - Production MCP server implementation
 - **Agent State Monitor** (`agent_state_monitor.py`) - Real-time state detection system
 - **Tmux Manager** (`tmux_manager.py`) - Robust session and pane management
@@ -54,6 +56,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 📊 System Capabilities
 - **Multi-Agent Coordination**: Seamlessly orchestrate multiple Claude Code agents
 - **Intelligent Message Delivery**: Context-aware routing based on agent availability and state
+- **Persistent Team Sessions**: Resume coordinated work after restarts and interruptions
 - **Real-Time Monitoring**: Live agent state tracking with diagnostic tools
 - **Docker Isolation**: Complete containerized environments for secure agent separation
 - **Background Operations**: Non-blocking orchestrator operations with full process management
@@ -62,6 +65,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 🔧 Recent Modernization Achievements
 - **Poetry Migration**: Modern Python packaging and dependency management
 - **Enhanced Docker Integration**: Improved containerization with advanced CLI tooling
+- **Session Persistence System**: Container-based team session persistence without modifying dkcc
 - **Expanded Monitoring**: Comprehensive diagnostic and monitoring capabilities
 - **Production Toolchain**: Complete set of production-ready utilities and scripts
 
@@ -70,6 +74,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Claude Code Multi-Agent Orchestrator** - A framework for orchestrating multiple Claude Code agents with:
 - MCP (Model Context Protocol) integration for inter-agent communication
 - Intelligent message delivery based on agent states (IDLE, BUSY, WRITING, ERROR)
+- Persistent team sessions that survive container restarts and system reboots
 - Real-time agent state monitoring via tmux pane content analysis
 - Docker-based isolated agent environments
 - Background monitoring and automatic message queueing
@@ -303,6 +308,12 @@ python examples/team_mcp_demo.py
 # Enhanced demo with state monitoring
 python examples/team_mcp_demo_enhanced.py
 
+# With persistent session
+python examples/team_mcp_demo_enhanced.py --session-name my-project
+
+# Resume persistent session
+python examples/team_mcp_demo_enhanced.py --resume my-project
+
 # With custom model
 ANTHROPIC_MODEL=sonnet python examples/team_mcp_demo_enhanced.py
 ```
@@ -345,6 +356,30 @@ python scripts/diagnose_agent_states.py <session-name> --single
 # or use the shortcut:
 ./scripts/capture-state-snapshot.sh [session-name]
 # Saves to .temp/state_snapshot_TIMESTAMP.txt
+```
+
+### Session Management (session-cli)
+
+#### Installation:
+```bash
+# Install session-cli to your PATH
+./scripts/install-session-cli.sh
+```
+
+#### Usage:
+```bash
+# List all team sessions
+session-cli list
+
+# Check team session health
+session-cli health my-project
+
+# Clean up team sessions
+session-cli cleanup --interactive
+session-cli cleanup --remove my-project
+
+# Export team session metadata
+session-cli export my-project --output ./backup/
 ```
 
 ### Docker Management (dkcc)

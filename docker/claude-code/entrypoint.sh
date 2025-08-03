@@ -134,7 +134,14 @@ fi
 # CLAUDE_CONTAINER_MODE can be "shared" (default) or "isolated"
 CLAUDE_CONTAINER_MODE=${CLAUDE_CONTAINER_MODE:-shared}
 
-if [ -d "$USER_HOME/.claude-host" ]; then
+# Check if .claude-host is actually mounted
+CLAUDE_HOST_MOUNTED=false
+if mountpoint -q "$USER_HOME/.claude-host" 2>/dev/null; then
+    CLAUDE_HOST_MOUNTED=true
+fi
+
+if [ "$CLAUDE_HOST_MOUNTED" = "true" ]; then
+    echo "Claude host directory is mounted from host system"
     if [ "$CLAUDE_CONTAINER_MODE" = "shared" ]; then
         # Shared mode: Just symlink everything without modification
         if [ -d "$USER_HOME/.claude-host/.claude" ]; then
@@ -147,7 +154,15 @@ if [ -d "$USER_HOME/.claude-host" ]; then
             chown -h "$USER_ID:$GROUP_ID" "$USER_HOME/.claude.json"
         fi
     else
-        # Isolated mode (default): Copy and filter configuration
+        # Isolated mode: Copy and filter configuration
+        
+        # SAFETY CHECK: Ensure .claude is not already a symlink/mount from shared mode
+        if [ -L "$USER_HOME/.claude" ] || mountpoint -q "$USER_HOME/.claude" 2>/dev/null; then
+            echo "ERROR: .claude is a symlink or mountpoint in isolated mode - this is unsafe!"
+            echo "Please remove the symlink/mount before running in isolated mode"
+            exit 1
+        fi
+        
         # Create .claude directory if it doesn't exist
         mkdir -p "$USER_HOME/.claude"
         chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
@@ -204,69 +219,28 @@ if [ -d "$USER_HOME/.claude-host" ]; then
             done
         fi
     fi
-fi
-
-# Create a wrapper script that initializes pyenv and sources venv if available
-cat > /tmp/run_command.sh << 'EOF'
-#!/bin/bash
-# Initialize pyenv
-export PYENV_ROOT="/opt/pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init - --no-rehash)"
-
-# Initialize Poetry
-export POETRY_HOME="/opt/poetry"
-export PATH="$POETRY_HOME/bin:$PATH"
-
-# Prioritize local Claude Code installation (auto-updating version)
-if [ -d "${HOME}/.claude/local" ]; then
-    export PATH="${HOME}/.claude/local:$PATH"
-fi
-
-# Ensure WORKSPACE_PATH is set
-if [ -z "${WORKSPACE_PATH}" ]; then
-    export WORKSPACE_PATH="/workspace"
-fi
-
-# Configure Poetry for Docker environment
-cd "${WORKSPACE_PATH}" 2>/dev/null || true
-
-# Simple solution: Create a docker-specific venv directory using Poetry env command
-export POETRY_VIRTUALENVS_IN_PROJECT=false
-export POETRY_VIRTUALENVS_PATH="${WORKSPACE_PATH}/.venv-docker"
-
-# Configure Poetry
-if command -v poetry &> /dev/null; then
-    poetry config virtualenvs.in-project false
-    poetry config virtualenvs.path "${WORKSPACE_PATH}/.venv-docker"
-    
-    # Ensure Python 3.12 is used
-    poetry env use python3.12 2>/dev/null || true
-fi
-
-# Check if a venv exists in .venv-docker
-if [ -d "${WORKSPACE_PATH}/.venv-docker" ]; then
-    # Find the actual venv (it will be named like project-xxx-py3.12)
-    DOCKER_VENV=$(find "${WORKSPACE_PATH}/.venv-docker" -maxdepth 1 -type d -name "*-py3.12" | head -1)
-    if [ -n "$DOCKER_VENV" ] && [ -d "$DOCKER_VENV" ]; then
-        export VIRTUAL_ENV="$DOCKER_VENV"
-        export PATH="$VIRTUAL_ENV/bin:$PATH"
-        source "$VIRTUAL_ENV/bin/activate" 2>/dev/null || true
-    else
-        echo "Docker venv directory exists but no valid environment found."
-        echo "Run 'poetry install --no-root' to create it."
-    fi
 else
-    echo "Docker venv not found. Run 'poetry install --no-root' to create it."
-    echo "Poetry will create environment in: ${WORKSPACE_PATH}/.venv-docker/"
+    echo "Warning: Claude host directory not mounted - running without host configuration"
+    # Create a basic .claude directory structure
+    mkdir -p "$USER_HOME/.claude/projects"
+    chown -R "$USER_ID:$GROUP_ID" "$USER_HOME/.claude"
 fi
 
-# Execute the command
-exec "$@"
-EOF
+# Start session monitor daemon (isolated mode only and when host is mounted)
+if [ "$CLAUDE_CONTAINER_MODE" = "isolated" ] && [ "$CLAUDE_HOST_MOUNTED" = "true" ]; then
+    echo "Starting session monitor daemon for isolated mode..."
+    # Start the daemon in background as the user
+    su -c "nohup /usr/local/bin/session-monitor-daemon.sh '$USER_NAME' '$USER_HOME' > /tmp/session_monitor_startup.log 2>&1 &" "$USER_NAME"
+    
+    # Ensure the host projects directory exists
+    mkdir -p "$USER_HOME/.claude-host/.claude/projects"
+elif [ "$CLAUDE_CONTAINER_MODE" = "isolated" ] && [ "$CLAUDE_HOST_MOUNTED" = "false" ]; then
+    echo "Warning: Isolated mode requested but host directory not mounted - session monitoring disabled"
+fi
 
-chmod +x /tmp/run_command.sh
+# Ensure run-command.sh can access workspace path
+export WORKSPACE_PATH
 
 # Execute the command as the user with the wrapper
 # Use username instead of UID:GID so gosu picks up all supplementary groups
-exec gosu $USER_NAME /tmp/run_command.sh "$@"
+exec gosu $USER_NAME /usr/local/bin/run-command.sh "$@"

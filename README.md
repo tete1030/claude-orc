@@ -20,6 +20,7 @@ This orchestrator enables multiple Claude agents to work together by:
 - **Agent State Detection**: Monitors tmux panes to detect when agents are busy, idle, or have errors
 - **Intelligent Notifications**: Sends messages directly to agent TUI when they're idle and ready
 - **Message Queueing**: Holds messages for busy agents and delivers when they become available
+- **Session Persistence**: Team sessions survive container restarts and system reboots
 - **Docker Integration**: Runs agents in isolated containers with shared communication directory
 - **Model Selection**: Choose Claude model via command line (defaults to Sonnet)
 - **Debug Control**: Enable/disable debug mode as needed
@@ -49,6 +50,9 @@ This orchestrator enables multiple Claude agents to work together by:
    
    # Install dkcc (Docker Claude Code manager)
    ./scripts/install-dkcc.sh
+   
+   # Install session-cli (team session management)
+   ./scripts/install-session-cli.sh
    ```
 
 ## Quick Start
@@ -64,6 +68,26 @@ python examples/team_mcp_demo_enhanced.py
 ```
 
 This runs a team of three agents (Leader, Researcher, Writer) with intelligent message delivery, agent state detection, and automatic notifications.
+
+### Persistent Team Sessions
+
+Create persistent team sessions that survive restarts:
+
+```bash
+# Create a new persistent team session
+python examples/team_mcp_demo_enhanced.py --session-name my-project
+
+# Resume work later
+python examples/team_mcp_demo_enhanced.py --resume my-project
+
+# List all team sessions
+session-cli list
+
+# Clean up when done
+session-cli cleanup --remove my-project
+```
+
+See the [Session Management Guide](docs/SESSION_MANAGEMENT_GUIDE.md) for complete details on persistent team sessions.
 
 ### Basic Example (Requires Authentication)
 
