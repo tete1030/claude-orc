@@ -80,57 +80,70 @@ class SessionCLIManager:
         return contexts
     
     def list_contexts(self) -> Dict[str, ContextInfo]:
-        """List registered team contexts from the context registry"""
+        """List registered team contexts using runtime Docker discovery"""
         contexts = {}
         
         # Get registered contexts
         registered_contexts = self.context_persistence.list_contexts()
         
         for name, context in registered_contexts.items():
-            # Get container names from agents
-            container_names = [agent.container for agent in context.agents]
+            # Use runtime discovery to find containers for this context
+            discovered_containers = self.container_discovery.discover_all_containers()
             
-            # Check container status
-            running = sum(
-                1 for container_name in container_names
-                if self.container_discovery.check_container_running(container_name)
-            )
-            
-            # Create ContextInfo for registered session
-            contexts[name] = ContextInfo(
-                name=name,
-                containers=[],  # Don't populate full container list for simple listing
-                tmux_session=context.tmux_session,
-                created=context.created_at,
-                total_containers=len(container_names),
-                running_containers=running,
-            )
+            if name in discovered_containers:
+                # Context has running containers
+                context_containers = discovered_containers[name]
+                contexts[name] = ContextInfo(
+                    name=name,
+                    containers=[],  # Don't populate full container list for simple listing
+                    tmux_session=context.tmux_session,
+                    created=context.created_at,
+                    total_containers=context_containers.total_containers,
+                    running_containers=context_containers.running_containers,
+                )
+            else:
+                # Context registered but no containers found
+                contexts[name] = ContextInfo(
+                    name=name,
+                    containers=[],
+                    tmux_session=context.tmux_session,
+                    created=context.created_at,
+                    total_containers=0,
+                    running_containers=0,
+                )
         
         return contexts
     
     def get_context_details(self, context_name: str) -> Optional[ContextInfo]:
-        """Get detailed information about a specific session"""
+        """Get detailed information about a specific session using runtime Docker discovery"""
         context = self.context_persistence.get_context(context_name)
         if not context:
             return None
         
-        # Get container names from agents
-        container_names = [agent.container for agent in context.agents]
+        # Use runtime discovery to find containers for this context
+        discovered_containers = self.container_discovery.discover_all_containers()
         
-        # Get live container information
-        containers = self.container_discovery.get_container_status(container_names)
-        
-        # Create ContextInfo
-        session_info = ContextInfo(
-            name=context_name,
-            containers=containers,
-            tmux_session=context.tmux_session,
-            created=context.created_at,
-            total_containers=len(containers),
-            running_containers=sum(1 for c in containers if c.running),
-        )
-        
-        return session_info
+        if context_name in discovered_containers:
+            # Context has containers - return detailed info
+            context_info = discovered_containers[context_name]
+            return ContextInfo(
+                name=context_name,
+                containers=context_info.containers,
+                tmux_session=context.tmux_session,
+                created=context.created_at,
+                total_containers=context_info.total_containers,
+                running_containers=context_info.running_containers,
+            )
+        else:
+            # Context registered but no containers found
+            return ContextInfo(
+                name=context_name,
+                containers=[],
+                tmux_session=context.tmux_session,
+                created=context.created_at,
+                total_containers=0,
+                running_containers=0,
+            )
     
     def health_check_context(self, context_name: str) -> Dict[str, any]:
         """Perform health check on session components"""

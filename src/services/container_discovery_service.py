@@ -2,8 +2,12 @@
 Container Discovery Service
 
 Handles discovery and parsing of Docker containers for team contexts.
+Uses Docker inspect for proper JSON-based label reading.
 """
 import subprocess
+import json
+import logging
+import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
@@ -34,14 +38,17 @@ class ContainerDiscoveryService:
     
     def __init__(self, container_prefix: str = "ccbox-"):
         self.container_prefix = container_prefix
+        self.logger = logging.getLogger(__name__)
+        # Container name validation pattern (alphanumeric, dash, underscore)
+        self._container_name_pattern = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$')
     
     def discover_all_containers(self) -> Dict[str, ContextInfo]:
-        """Discover all team contexts from running containers"""
+        """Discover all team contexts from running containers using docker inspect"""
         contexts = {}
         
         try:
-            # Get all ccbox containers
-            result = subprocess.run(
+            # Phase 1: Get container names
+            ps_result = subprocess.run(
                 [
                     "docker",
                     "ps",
@@ -49,40 +56,61 @@ class ContainerDiscoveryService:
                     "--filter",
                     f"name={self.container_prefix}",
                     "--format",
-                    "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
+                    "{{.Names}}",
                 ],
                 capture_output=True,
                 text=True,
                 check=True,
             )
             
-            for line in result.stdout.strip().split("\n"):
-                if not line:
+            container_names = [name.strip() for name in ps_result.stdout.strip().split("\n") if name.strip()]
+            
+            if not container_names:
+                return contexts
+            
+            # Phase 2: Batch inspect all containers at once
+            inspect_result = subprocess.run(
+                ["docker", "inspect"] + container_names,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            
+            containers_data = json.loads(inspect_result.stdout)
+            
+            # Process each container's data
+            for container_data in containers_data:
+                # Extract relevant fields
+                container_name = container_data["Name"].lstrip("/")  # Docker adds leading slash
+                labels = container_data["Config"]["Labels"] or {}
+                state = container_data["State"]
+                created = container_data["Created"]
+                
+                # Check for our label schema
+                if "xyz.texot.ccbox.schema_version" not in labels:
+                    self.logger.debug(f"Container '{container_name}' missing schema version label. Skipping.")
                     continue
                 
-                parts = line.split("\t")
-                if len(parts) < 3:
+                context_name = labels.get("xyz.texot.ccbox.context")
+                agent_role = labels.get("xyz.texot.ccbox.role")
+                
+                if not context_name or not agent_role:
+                    self.logger.debug(f"Container '{container_name}' missing required labels (context/role). Skipping.")
                     continue
                 
-                container_name, status, created = parts[0], parts[1], parts[2]
-                
-                # Parse container name to extract session and role
-                context_name, agent_role = self.parse_container_name(container_name)
-                if not context_name:
-                    continue
-                
-                # Determine if container is running
-                running = "Up" in status
+                # Create container info
+                # Build status string from running state
+                status = "running" if state["Running"] else f"exited ({state.get('ExitCode', 'unknown')})"
                 
                 container_info = ContainerInfo(
                     name=container_name,
                     status=status,
                     created=created,
                     agent_role=agent_role,
-                    running=running,
+                    running=state["Running"],
                 )
                 
-                # Add to session
+                # Add to context
                 if context_name not in contexts:
                     contexts[context_name] = ContextInfo(
                         name=context_name,
@@ -95,7 +123,7 @@ class ContainerDiscoveryService:
                 
                 contexts[context_name].containers.append(container_info)
                 contexts[context_name].total_containers += 1
-                if running:
+                if state["Running"]:
                     contexts[context_name].running_containers += 1
                 
                 # Set session creation time to earliest container
@@ -103,79 +131,89 @@ class ContainerDiscoveryService:
                     contexts[context_name].created = created
         
         except subprocess.CalledProcessError as e:
-            print(f"Error discovering contexts: {e}")
+            self.logger.error(f"Docker command failed during discovery: {e}")
+            raise RuntimeError(f"Failed to discover containers: {e}") from e
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON from docker inspect: {e}")
+            raise RuntimeError(f"Failed to parse docker output: {e}") from e
         
         return contexts
     
-    def parse_container_name(self, container_name: str) -> Tuple[Optional[str], Optional[str]]:
-        """Parse container name to extract session name and agent role"""
-        if not container_name.startswith(self.container_prefix):
-            return None, None
-        
-        # Remove prefix: ccbox-session-role or ccbox-session-sub-role
-        name_part = container_name[len(self.container_prefix):]
-        
-        # Find last dash to separate role from session name
-        parts = name_part.split("-")
-        if len(parts) < 2:
-            return None, None
-        
-        # Agent role is the last part
-        agent_role = parts[-1]
-        # Session name is everything before the last dash
-        context_name = "-".join(parts[:-1])
-        
-        return context_name, agent_role
+    # Container identification relies solely on Docker labels
+    # No parsing or guessing - containers without proper labels are rejected
     
     def get_container_status(self, container_names: List[str]) -> List[ContainerInfo]:
-        """Get status information for specific containers"""
+        """Get status information for specific containers using docker inspect"""
         containers = []
         
-        for container_name in container_names:
-            try:
-                # Get container status
-                result = subprocess.run(
-                    [
-                        "docker",
-                        "ps",
-                        "-a",
-                        "--filter",
-                        f"name=^{container_name}$",
-                        "--format",
-                        "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                
-                if result.stdout.strip():
-                    parts = result.stdout.strip().split("\t")
-                    if len(parts) >= 3:
-                        status = parts[1]
-                        created = parts[2]
-                        running = "Up" in status
-                        
-                        # Extract agent role from container name
-                        agent_role = container_name.split("-")[-1]
-                        
-                        container_info = ContainerInfo(
-                            name=container_name,
-                            status=status,
-                            created=created,
-                            agent_role=agent_role,
-                            running=running,
-                        )
-                        
-                        containers.append(container_info)
+        if not container_names:
+            return containers
+        
+        # Validate container names for security
+        validated_names = []
+        for name in container_names:
+            if not self._container_name_pattern.match(name):
+                self.logger.warning(f"Invalid container name format: {name}")
+                continue
+            validated_names.append(name)
+        
+        if not validated_names:
+            return containers
+        
+        try:
+            # Batch inspect all validated containers
+            inspect_result = subprocess.run(
+                ["docker", "inspect"] + validated_names,
+                capture_output=True,
+                text=True,
+                check=False,  # Don't fail if some containers don't exist
+            )
             
-            except subprocess.CalledProcessError:
-                pass
+            if inspect_result.returncode != 0:
+                # Some containers might not exist, that's ok
+                return containers
+            
+            containers_data = json.loads(inspect_result.stdout)
+            
+            # Process each container's data
+            for container_data in containers_data:
+                # Extract relevant fields
+                container_name = container_data["Name"].lstrip("/")
+                labels = container_data["Config"]["Labels"] or {}
+                state = container_data["State"]
+                created = container_data["Created"]
+                
+                # Check for required labels
+                if "xyz.texot.ccbox.schema_version" not in labels:
+                    self.logger.debug(f"Container '{container_name}' missing schema version label. Skipping.")
+                    continue
+                
+                agent_role = labels.get("xyz.texot.ccbox.role")
+                if not agent_role:
+                    self.logger.debug(f"Container '{container_name}' missing required 'xyz.texot.ccbox.role' label.")
+                    continue
+                
+                # Create container info
+                # Build status string from running state
+                status = "running" if state["Running"] else f"exited ({state.get('ExitCode', 'unknown')})"
+                
+                containers.append(ContainerInfo(
+                    name=container_name,
+                    status=status,
+                    created=created,
+                    agent_role=agent_role,
+                    running=state["Running"],
+                ))
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON from docker inspect: {e}")
+            # Return empty list instead of raising - some containers might not exist
+            return []
         
         return containers
     
     def check_container_running(self, container_name: str) -> bool:
-        """Quick check if a container exists and is running"""
+        """Check if a container exists and is running - exact name match only"""
         try:
             result = subprocess.run(
                 ["docker", "inspect", "-f", "{{.State.Running}}", container_name],

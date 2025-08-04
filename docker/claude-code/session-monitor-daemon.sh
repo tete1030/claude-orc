@@ -4,7 +4,7 @@
 
 MONITOR_USER="$1"
 MONITOR_HOME="$2"
-CONTAINER_NAME="${CLAUDE_INSTANCE:-unknown}"
+CLAUDE_INSTANCE="${CLAUDE_INSTANCE:-unknown}"
 LOG_FILE="/tmp/session_monitor.log"
 PID_FILE="/tmp/session_monitor.pid"
 
@@ -26,7 +26,7 @@ fi
 
 # Write our PID
 echo $$ > "$PID_FILE"
-log "Session monitor daemon starting (PID $$) for user $MONITOR_USER in container $CONTAINER_NAME"
+log "Session monitor daemon starting (PID $$) for user $MONITOR_USER in container $CLAUDE_INSTANCE"
 
 # Cleanup on exit
 cleanup() {
@@ -76,7 +76,7 @@ fi
 process_directory() {
     local dir="$1"
     local dir_name=$(basename "$dir")
-    local host_dir="$HOST_PROJECTS/ccbox-${CONTAINER_NAME}-${dir_name}"
+    local host_dir="$HOST_PROJECTS/ccbox-${CLAUDE_INSTANCE}-${dir_name}"
 
     if [ -e "$host_dir" ] && { [ ! -d "$host_dir" ] || [ -L "$host_dir" ]; }; then
         log "ERROR: $host_dir not a directory"
@@ -101,7 +101,7 @@ process_directory() {
 process_host_directory() {
     local hostdir="$1"
     local hostdir_name=$(basename "$hostdir")
-    local dir_name="${hostdir_name#ccbox-"${CONTAINER_NAME}"-}"
+    local dir_name="${hostdir_name#ccbox-"${CLAUDE_INSTANCE}"-}"
     local dir="$CLAUDE_PROJECTS/$dir_name"
 
     if [ -L "$dir" ]; then
@@ -131,7 +131,7 @@ for dir in "$CLAUDE_PROJECTS"/*; do
     fi
 done
 
-for hostdir in "$HOST_PROJECTS"/ccbox-${CONTAINER_NAME}-*; do
+for hostdir in "$HOST_PROJECTS"/ccbox-${CLAUDE_INSTANCE}-*; do
     if [ -d "$hostdir" ] && [ ! -L "$hostdir" ]; then
         log "Processing host project of this container: $hostdir"
         process_host_directory "$hostdir"

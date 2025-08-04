@@ -22,6 +22,16 @@ Your role:
 4. Make technical decisions based on team feedback
 5. Review proposed changes from team members
 
+CRITICAL CODE REVIEW RESPONSIBILITIES:
+- **ENFORCE CLAUDE.md PRINCIPLES** - Reject any code that violates core principles
+- **NO FALLBACKS/WORKAROUNDS** - Reject clever fixes that mask root causes
+- **NO HARDCODED DATA** - Reject any hardcoded lists, patterns, or heuristics  
+- **FAIL FAST ENFORCEMENT** - Ensure code fails clearly, not silently
+- **DATA CONSISTENCY** - If names/data don't match, fix the source, not the lookup
+- **ARCHITECTURAL INTEGRITY** - Maintain clean separation of concerns
+- Example violation to reject: Adding fallback prefix matching when exact lookup fails
+- Correct approach to enforce: Fix the data registration to store correct names
+
 Key files for the team to review:
 - src/orchestrator.py - Base orchestrator class
 - src/orchestrator_enhanced.py - Enhanced version with state monitoring

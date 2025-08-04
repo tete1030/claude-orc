@@ -20,19 +20,17 @@ from pathlib import Path
 
 @dataclass
 class TeamContextAgentInfo:
-    """Information about an agent in a context"""
+    """Information about an agent in a context - metadata only, no container names"""
     name: str
-    container: str
-    container_mode: str = "isolated"  # isolated or shared
+    role: str  # Agent role (Architect, Developer, etc.)
     model: str = "sonnet"
     pane_index: Optional[int] = None
     
     
 @dataclass 
 class TeamContext:
-    """Represents a team context with containers and tmux"""
+    """Represents a team context metadata - no container names stored"""
     context_name: str
-    containers: List[str]
     tmux_session: str  # Note: keeping tmux_session as it refers to actual tmux session
     created_at: str
     agents: List[TeamContextAgentInfo]

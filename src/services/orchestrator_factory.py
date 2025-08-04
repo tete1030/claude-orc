@@ -46,9 +46,10 @@ class ConfigurableTmuxManager:
 class ConfigurableClaudeLauncher:
     """Wrapper for ClaudeLauncherConfig that handles model configuration"""
     
-    def __init__(self, launcher_config_class, agent_configs: Dict[str, Dict[str, Any]], debug: bool = False):
+    def __init__(self, launcher_config_class, agent_configs: Dict[str, Dict[str, Any]], context_name: str = None, debug: bool = False):
         self._launcher_class = launcher_config_class
         self._agent_configs = agent_configs
+        self._context_name = context_name or "default"
         self._debug = debug
         self._original_build = launcher_config_class.build_command_string
     
@@ -63,14 +64,26 @@ class ConfigurableClaudeLauncher:
         # Build base command
         cmd = self._original_build(instance_name, session_id, system_prompt, mcp_config_path)
         
+        # Build all parameters at once to maintain proper order
+        params = []
+        
+        # Add explicit context and role parameters first
+        agent_role = agent_config.get("role", "instance")
+        params.extend(["--context", self._context_name, "--role", agent_role])
+        
         # Add model if specified
         model = agent_config.get("model")
         if model:
-            cmd = cmd.replace("ccdk", f"ccdk --model {model}", 1)
+            params.extend(["--model", model])
             
         # Add debug flag if needed
         if self._debug:
-            cmd = cmd.replace("ccdk", "ccdk --debug", 1)
+            params.append("--debug")
+        
+        # Replace ccdk with ccdk plus all parameters
+        if params:
+            params_str = " ".join(params)
+            cmd = cmd.replace("ccdk", f"ccdk {params_str}", 1)
             
         return cmd
 
@@ -144,10 +157,12 @@ class OrchestratorFactory:
         configurable_launcher = ConfigurableClaudeLauncher(
             ClaudeLauncherConfig,
             agent_configs,
-            debug
+            context_name=orchestrator.config.context_name,
+            debug=debug
         )
         
-        # This is still a bit of a hack, but it's contained within the factory
+        # Replace the class method to add agent-specific configuration
+        # This allows per-agent model and debug settings without modifying the base class
         ClaudeLauncherConfig.build_command_string = configurable_launcher.build_command_string
         
         self.logger.info("Configured launcher for model assignments")

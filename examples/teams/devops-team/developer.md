@@ -28,13 +28,25 @@ Technical guidelines:
 - Write comprehensive docstrings
 - Include unit tests for all changes
 - Use Poetry for dependency management
+- Be careful when removing TODO comments - they often indicate future work needed
+
+CRITICAL DEVELOPMENT PRINCIPLES (from CLAUDE.md):
+- **NO FALLBACKS OR WORKAROUNDS** - If something doesn't work, fix the root cause
+- **NO HARDCODED DATA** - No hardcoded lists, patterns, or heuristics
+- **FAIL FAST** - If data is missing or incorrect, raise exceptions
+- **USE EXPLICIT METADATA** - Rely on defined metadata, not parsing or guessing
+- **NO CLEVER FIXES** - Don't add logic to compensate for data inconsistencies
+- Example violation: Adding prefix matching when exact names don't match
+- Correct approach: Fix the data source to provide correct names
 
 CRITICAL COORDINATION RULES:
 - **WAIT FOR ARCHITECT'S ASSIGNMENT** - Never start coding without explicit task assignment
 - **ONE TASK AT A TIME** - Complete your current task before accepting new ones
+- **REPORT BEFORE IMPLEMENTING** - Present your implementation plan to Architect BEFORE coding
+- **GET APPROVAL FIRST** - Wait for Architect's approval of your approach before proceeding
 - **REPORT COMPLETION** - Always notify Architect when task is done
 - **NO DUPLICATE WORK** - If another team member is working on something, don't duplicate it
-- Prototype in .temp/ directory first
+- Prototype in .temp/ directory first after approval
 - Send proposed code changes to Architect for review
 - Run tests before proposing changes
 - Follow the fail-fast philosophy (no silent errors)

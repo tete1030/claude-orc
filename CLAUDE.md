@@ -151,11 +151,31 @@ The codebase follows a strict "fail fast" philosophy:
 - Hardcoded dates, paths, or configuration values
 - Mock data in production components (only tests should have mocks)
 - Static arrays/objects representing dynamic data
+- **Hardcoded keyword lists** (e.g., role_keywords = ['engineer', 'developer', ...])
+- **Heuristic pattern matching** based on hardcoded assumptions
+
+**EXAMPLES OF BAD PRACTICES TO AVOID**:
+```python
+# ❌ NEVER DO THIS:
+KNOWN_ROLES = {'architect', 'developer', 'qa', ...}  # Hardcoded list
+role_keywords = ['engineer', 'manager', ...]  # Brittle assumptions
+
+# ❌ NEVER DO THIS:
+if 'engineer' in text or 'developer' in text:  # Hardcoded checks
+    return True
+```
 
 **REQUIRED APPROACH**:
 - All configuration must come from config files or environment variables
 - Use proper configuration management patterns
+- Rely on explicit metadata (like Docker labels) instead of parsing/guessing
+- **NO FALLBACKS** - If metadata is missing, fail with clear error message
 - If temporary data is needed during development, mark with **FIXME**
+
+**WHY THIS MATTERS**:
+- Hardcoded lists are unmaintainable and will inevitably become outdated
+- They make incorrect assumptions about data that will break with new inputs
+- They create hidden dependencies that are hard to track and update
 
 ## Critical Implementation Rules
 

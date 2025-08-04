@@ -183,18 +183,10 @@ class TeamLaunchService:
         return agent_configs
     
     def _get_intelligent_model(self, agent_name: str, agent_role: str) -> str:
-        """Get intelligent model assignment based on agent role"""
-        # High-complexity roles get Opus
-        if any(keyword in agent_role.lower() or keyword in agent_name.lower() 
-               for keyword in ["architect", "lead"]):
-            return "opus"
-        # Implementation roles get Opus
-        elif any(keyword in agent_role.lower() or keyword in agent_name.lower() 
-                 for keyword in ["developer", "implementation", "coding"]):
-            return "opus"
-        # Standard roles get Sonnet  
-        else:
-            return "sonnet"
+        """Get default model assignment when none specified"""
+        # Return a sensible default without hardcoded role assumptions
+        # This should ideally come from configuration
+        return "sonnet"  # Default model for all roles
     
     def _register_agents(
         self,
@@ -273,12 +265,11 @@ class TeamLaunchService:
         agents = []
         tmux_session = orchestrator.tmux.session_name
         
-        # Get container names from environment
+        # Store agent metadata only (no container names)
         for agent_cfg in agent_configs.values():
-            container_name = f"ccbox-{agent_cfg['instance_name']}"
             agents.append(TeamContextAgentInfo(
                 name=agent_cfg["name"],
-                container=container_name,
+                role=agent_cfg["role"],
                 model=agent_cfg["model"],
                 pane_index=agent_cfg["pane_index"]
             ))

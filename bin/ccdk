@@ -18,6 +18,9 @@ RANDOM_INSTANCE_SUFFIX=""
 MODEL_NAME="${ANTHROPIC_MODEL:-}"
 CONTAINER_MODE="${CLAUDE_CONTAINER_MODE:-}"
 PARSED_ARGS=()
+# Explicit context and role parameters (no parsing)
+CONTEXT_NAME="default"
+ROLE="instance"
 
 # Function to parse options
 parse_options() {
@@ -50,6 +53,14 @@ parse_options() {
                 RANDOM_INSTANCE_SUFFIX="-$random_instance_suffix"
                 shift
                 ;;
+            --context)
+                CONTEXT_NAME="$2"
+                shift 2
+                ;;
+            --role)
+                ROLE="$2"
+                shift 2
+                ;;
             *)
                 PARSED_ARGS+=("$1")
                 shift
@@ -66,9 +77,11 @@ parse_options "$@"
 [ -n "$MODEL_NAME" ] && export ANTHROPIC_MODEL="$MODEL_NAME"
 [ -n "$CONTAINER_MODE" ] && export CLAUDE_CONTAINER_MODE="$CONTAINER_MODE"
 
-# Set container name based on instance
-if [ -n "$INSTANCE_NAME" ]; then
-    CONTAINER_NAME="${DEFAULT_CONTAINER_NAME}-${INSTANCE_NAME}"
+# No parsing - context and role come from explicit parameters
+
+# Set container name based on instance (including random suffix if present)
+if [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ]; then
+    CONTAINER_NAME="${DEFAULT_CONTAINER_NAME}-${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
 else
     CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
 fi
@@ -359,6 +372,10 @@ start_container() {
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
         -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
+        --label "xyz.texot.ccbox.context=${CONTEXT_NAME:-default}" \
+        --label "xyz.texot.ccbox.role=${ROLE:-instance}" \
+        --label "xyz.texot.ccbox.agent_name=${INSTANCE_NAME:-$DEFAULT_CONTAINER_NAME}" \
+        --label "xyz.texot.ccbox.schema_version=1.0" \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -469,6 +486,10 @@ run_temporary() {
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
         -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
+        --label "xyz.texot.ccbox.context=${CONTEXT_NAME:-default}" \
+        --label "xyz.texot.ccbox.role=${ROLE:-instance}" \
+        --label "xyz.texot.ccbox.agent_name=${INSTANCE_NAME:-$DEFAULT_CONTAINER_NAME}" \
+        --label "xyz.texot.ccbox.schema_version=1.0" \
         $env_args \
         $volume_args \
         $custom_mounts \
@@ -508,6 +529,10 @@ run_shell() {
         -e WORKSPACE_PATH=$workspace_path \
         -e PYTHONPATH=$workspace_path \
         -e TERM="$(echo "${TERM:-xterm-256color}" | sed 's/tmux/xterm/g')" \
+        --label "xyz.texot.ccbox.context=${CONTEXT_NAME:-default}" \
+        --label "xyz.texot.ccbox.role=${ROLE:-instance}" \
+        --label "xyz.texot.ccbox.agent_name=${INSTANCE_NAME:-$DEFAULT_CONTAINER_NAME}" \
+        --label "xyz.texot.ccbox.schema_version=1.0" \
         $env_args \
         $volume_args \
         $custom_mounts \
