@@ -28,7 +28,7 @@ class TestOrchestrator(unittest.TestCase):
         self.temp_session_dir = self.session_helper.create_session_dir()
         
         self.config = OrchestratorConfig(
-            session_name="test-agents",
+            context_name="test-agents",
             poll_interval=0.1,
             interrupt_cooldown=1.0,
             session_dir=self.temp_session_dir

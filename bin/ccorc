@@ -8,307 +8,136 @@ Provides session discovery, health monitoring, and cleanup capabilities.
 
 import argparse
 import json
-import subprocess
 import sys
-import asyncio
-import threading
 import time
-import signal
 
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
-import os
+from typing import Dict, List, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import core modules
 try:
-    from src.team_context_manager import TeamContextManager, TeamContextAgentInfo
+    from src.team_context_manager import TeamContextManager
     from src.team_config_loader import TeamConfigLoader
-    from src.orchestrator import OrchestratorConfig, Orchestrator
-    from src.orchestrator_enhanced import EnhancedOrchestrator
-    from src.mcp_central_server import CentralMCPServer
-    from src.claude_launcher_config import ClaudeLauncherConfig
+    
+    # Import all refactored services
+    from src.services.container_discovery_service import (
+        ContainerDiscoveryService, ContainerInfo, ContextInfo
+    )
+    from src.services.tmux_management_service import TmuxManagementService
+    from src.services.container_health_service import ContainerHealthService
+    from src.services.context_cleanup_service import ContextCleanupService
+    from src.services.team_launch_service import TeamLaunchService
+    from src.services.port_discovery_service import PortDiscoveryService
+    from src.services.layout_detection_service import LayoutDetectionService
+    from src.services.orchestrator_factory import OrchestratorFactory
+    from src.services.mcp_server_manager import MCPServerManager
+    from src.services.signal_handler_service import SignalHandlerService
+    from src.services.context_persistence_service import ContextPersistenceService
 except ImportError as e:
     print(f"Error: Could not import required modules: {e}", file=sys.stderr)
     sys.exit(1)
 
 
-@dataclass
-class ContainerInfo:
-    """Information about a container"""
-
-    name: str
-    status: str
-    created: str
-    agent_role: str
-    running: bool
-
-
-@dataclass
-class ContextInfo:
-    """Information about a team context"""
-
-    name: str
-    containers: List[ContainerInfo]
-    tmux_session: Optional[str]
-    created: Optional[str]
-    total_containers: int
-    running_containers: int
-
-
 class SessionCLIManager:
-    """CLI-specific session management with container discovery"""
-
+    """Refactored CLI manager that coordinates services"""
+    
     def __init__(self):
-        self.container_prefix = "ccbox-"
+        # Core manager
         self.context_manager = TeamContextManager()
-
+        
+        # Initialize all services
+        self.container_discovery = ContainerDiscoveryService()
+        self.tmux_management = TmuxManagementService()
+        self.container_health = ContainerHealthService()
+        self.context_cleanup = ContextCleanupService(self.tmux_management)
+        
+        # Services for team launching
+        self.port_service = PortDiscoveryService()
+        self.layout_service = LayoutDetectionService()
+        self.orchestrator_factory = OrchestratorFactory(layout_service=self.layout_service)
+        self.mcp_server_manager = MCPServerManager()
+        self.signal_handler = SignalHandlerService()
+        self.context_persistence = ContextPersistenceService(self.context_manager)
+        
+        self.team_launch = TeamLaunchService(
+            port_service=self.port_service,
+            orchestrator_factory=self.orchestrator_factory,
+            mcp_server_manager=self.mcp_server_manager,
+            signal_handler=self.signal_handler,
+            context_persistence=self.context_persistence,
+            cleanup_callback=self.cleanup_context
+        )
+        
+        self.team_loader = TeamConfigLoader()
+    
     def discover_contexts(self) -> Dict[str, ContextInfo]:
         """Discover all team contexts from running containers"""
-        contexts = {}
-
-        try:
-            # Get all ccbox containers
-            result = subprocess.run(
-                [
-                    "docker",
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={self.container_prefix}",
-                    "--format",
-                    "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            for line in result.stdout.strip().split("\n"):
-                if not line:
-                    continue
-
-                parts = line.split("\t")
-                if len(parts) < 3:
-                    continue
-
-                container_name, status, created = parts[0], parts[1], parts[2]
-
-                # Parse container name to extract session and role
-                context_name, agent_role = self._parse_container_name(container_name)
-                if not context_name:
-                    continue
-
-                # Determine if container is running
-                running = "Up" in status
-
-                container_info = ContainerInfo(
-                    name=container_name,
-                    status=status,
-                    created=created,
-                    agent_role=agent_role,
-                    running=running,
-                )
-
-                # Add to session
-                if context_name not in contexts:
-                    contexts[context_name] = ContextInfo(
-                        name=context_name,
-                        containers=[],
-                        tmux_session=None,
-                        created=None,
-                        total_containers=0,
-                        running_containers=0,
-                    )
-
-                contexts[context_name].containers.append(container_info)
-                contexts[context_name].total_containers += 1
-                if running:
-                    contexts[context_name].running_containers += 1
-
-                # Set session creation time to earliest container
-                if not contexts[context_name].created or created < contexts[context_name].created:
-                    contexts[context_name].created = created
-
-            # Check for tmux sessions
-            self._discover_tmux_sessions(contexts)
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error discovering contexts: {e}", file=sys.stderr)
-
+        contexts = self.container_discovery.discover_all_containers()
+        self.tmux_management.discover_tmux_sessions(contexts)
         return contexts
-
-    def _parse_container_name(self, container_name: str) -> Tuple[Optional[str], Optional[str]]:
-        """Parse container name to extract session name and agent role"""
-        if not container_name.startswith(self.container_prefix):
-            return None, None
-
-        # Remove prefix: ccbox-session-role or ccbox-session-sub-role
-        name_part = container_name[len(self.container_prefix):]
-
-        # Find last dash to separate role from session name
-        parts = name_part.split("-")
-        if len(parts) < 2:
-            return None, None
-
-        # Agent role is the last part
-        agent_role = parts[-1]
-        # Session name is everything before the last dash
-        context_name = "-".join(parts[:-1])
-
-        return context_name, agent_role
-
-    def _discover_tmux_sessions(self, contexts: Dict[str, ContextInfo]):
-        """Discover related tmux sessions"""
-        try:
-            result = subprocess.run(
-                ["tmux", "list-sessions", "-F", "#{session_name}"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            tmux_sessions = result.stdout.strip().split("\n")
-
-            for context_name in contexts:
-                # Look for tmux session that matches or contains the team context name
-                for tmux_session in tmux_sessions:
-                    if tmux_session and (
-                        context_name in tmux_session or tmux_session in context_name
-                    ):
-                        contexts[context_name].tmux_session = tmux_session
-                        break
-
-        except subprocess.CalledProcessError:
-            # tmux might not be running or no sessions exist
-            pass
-
-    def get_context_details(self, context_name: str) -> Optional[ContextInfo]:
-        """Get detailed information about a specific session"""
-        # First check if session is registered
-        try:
-            registered = self.context_manager.list_contexts()
-            if context_name not in registered:
-                # Not a registered team context
-                return None
-
-            session_data = registered[context_name]
-
-            # Get live container information for this session
-            session_info = ContextInfo(
-                name=context_name,
-                containers=[],
-                tmux_session=session_data.get("tmux_session"),
-                created=session_data.get("created_at"),
-                total_containers=0,
-                running_containers=0,
-            )
-
-            # Check each registered container
-            for container_name in session_data.get("containers", []):
-                try:
-                    # Get container status
-                    result = subprocess.run(
-                        [
-                            "docker",
-                            "ps",
-                            "-a",
-                            "--filter",
-                            f"name=^{container_name}$",
-                            "--format",
-                            "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
-
-                    if result.stdout.strip():
-                        parts = result.stdout.strip().split("\t")
-                        if len(parts) >= 3:
-                            status = parts[1]
-                            created = parts[2]
-                            running = "Up" in status
-
-                            # Extract agent role from container name
-                            agent_role = container_name.split("-")[-1]
-
-                            container_info = ContainerInfo(
-                                name=container_name,
-                                status=status,
-                                created=created,
-                                agent_role=agent_role,
-                                running=running,
-                            )
-
-                            session_info.containers.append(container_info)
-                            session_info.total_containers += 1
-                            if running:
-                                session_info.running_containers += 1
-
-                except subprocess.CalledProcessError:
-                    pass
-
-            return session_info
-
-        except Exception as e:
-            print(f"Error getting session details: {e}", file=sys.stderr)
-            return None
-
+    
     def list_contexts(self) -> Dict[str, ContextInfo]:
         """List registered team contexts from the context registry"""
         contexts = {}
-
-        try:
-            # Get only registered contexts from core manager
-            registered = self.context_manager.list_contexts()
-
-            for name, session_data in registered.items():
-                # Check container status for each registered session
-                running = 0
-
-                # Check each container in the registered session
-                for container_name in session_data.get("containers", []):
-                    # Quick check if container exists and is running
-                    try:
-                        result = subprocess.run(
-                            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        )
-
-                        is_running = result.returncode == 0 and result.stdout.strip() == "true"
-                        if is_running:
-                            running += 1
-                    except Exception:
-                        pass
-
-                # Create ContextInfo for registered session
-                contexts[name] = ContextInfo(
-                    name=name,
-                    containers=[],  # Don't populate full container list for simple listing
-                    tmux_session=session_data.get("tmux_session"),
-                    created=session_data.get("created_at"),
-                    total_containers=len(session_data.get("containers", [])),
-                    running_containers=running,
-                )
-
-        except Exception as e:
-            print(f"Warning: Could not load registry data: {e}", file=sys.stderr)
-
+        
+        # Get registered contexts
+        registered_contexts = self.context_persistence.list_contexts()
+        
+        for name, context in registered_contexts.items():
+            # Get container names from agents
+            container_names = [agent.container for agent in context.agents]
+            
+            # Check container status
+            running = sum(
+                1 for container_name in container_names
+                if self.container_discovery.check_container_running(container_name)
+            )
+            
+            # Create ContextInfo for registered session
+            contexts[name] = ContextInfo(
+                name=name,
+                containers=[],  # Don't populate full container list for simple listing
+                tmux_session=context.tmux_session,
+                created=context.created_at,
+                total_containers=len(container_names),
+                running_containers=running,
+            )
+        
         return contexts
-
+    
+    def get_context_details(self, context_name: str) -> Optional[ContextInfo]:
+        """Get detailed information about a specific session"""
+        context = self.context_persistence.get_context(context_name)
+        if not context:
+            return None
+        
+        # Get container names from agents
+        container_names = [agent.container for agent in context.agents]
+        
+        # Get live container information
+        containers = self.container_discovery.get_container_status(container_names)
+        
+        # Create ContextInfo
+        session_info = ContextInfo(
+            name=context_name,
+            containers=containers,
+            tmux_session=context.tmux_session,
+            created=context.created_at,
+            total_containers=len(containers),
+            running_containers=sum(1 for c in containers if c.running),
+        )
+        
+        return session_info
+    
     def health_check_context(self, context_name: str) -> Dict[str, any]:
         """Perform health check on session components"""
         context = self.get_context_details(context_name)
         if not context:
             return {"error": f"Context '{context_name}' not found"}
-
+        
         health_status = {
             "context_name": context_name,
             "overall_health": "healthy",
@@ -316,264 +145,83 @@ class SessionCLIManager:
             "tmux_session": None,
             "issues": [],
         }
-
+        
         # Check container health
-        for container in context.containers:
-            container_health = self._check_container_health(container)
-            health_status["containers"][container.name] = container_health
-
+        container_health_results = self.container_health.check_all_containers_health(
+            context.containers
+        )
+        
+        health_status["containers"] = container_health_results
+        
+        # Check for any unhealthy containers
+        for container_name, container_health in container_health_results.items():
             if container_health["status"] != "healthy":
                 health_status["overall_health"] = "degraded"
                 health_status["issues"].extend(container_health.get("issues", []))
-
+        
         # Check tmux session
         if context.tmux_session:
-            tmux_health = self._check_tmux_health(context.tmux_session)
+            tmux_health = self.tmux_management.check_tmux_health(context.tmux_session)
             health_status["tmux_session"] = tmux_health
-
+            
             if tmux_health["status"] != "healthy":
                 health_status["overall_health"] = "degraded"
                 health_status["issues"].extend(tmux_health.get("issues", []))
-
+        
         return health_status
-
-    def _check_container_health(self, container: ContainerInfo) -> Dict[str, any]:
-        """Check health of individual container"""
-        health = {
-            "name": container.name,
-            "status": "healthy",
-            "running": container.running,
-            "claude_process": False,
-            "session_files": False,
-            "resource_usage": {},
-            "issues": [],
-        }
-
-        if not container.running:
-            health["status"] = "stopped"
-            health["issues"].append("Container is not running")
-            return health
-
-        try:
-            # Check Claude process
-            result = subprocess.run(
-                ["docker", "exec", container.name, "pgrep", "-f", "claude"],
-                capture_output=True,
-                text=True,
-            )
-
-            health["claude_process"] = result.returncode == 0
-            if not health["claude_process"]:
-                health["issues"].append("Claude process not found")
-                health["status"] = "unhealthy"
-
-            # Check session files
-            result = subprocess.run(
-                ["docker", "exec", container.name, "test", "-f", "/home/developer/.claude.json"],
-                capture_output=True,
-                text=True,
-            )
-
-            health["session_files"] = result.returncode == 0
-            if not health["session_files"]:
-                health["issues"].append("Claude session files missing")
-
-            # Check resource usage
-            result = subprocess.run(
-                [
-                    "docker",
-                    "stats",
-                    "--no-stream",
-                    "--format",
-                    "{{.CPUPerc}}\t{{.MemUsage}}",
-                    container.name,
-                ],
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                stats = result.stdout.strip().split("\t")
-                if len(stats) >= 2:
-                    health["resource_usage"] = {"cpu_percent": stats[0], "memory_usage": stats[1]}
-
-        except subprocess.CalledProcessError:
-            health["status"] = "error"
-            health["issues"].append("Failed to check container health")
-
-        return health
-
-    def _check_tmux_health(self, tmux_session: str) -> Dict[str, any]:
-        """Check health of tmux session"""
-        health = {
-            "context_name": tmux_session,
-            "status": "healthy",
-            "exists": False,
-            "panes": 0,
-            "issues": [],
-        }
-
-        try:
-            # Check if session exists
-            result = subprocess.run(
-                ["tmux", "has-session", "-t", tmux_session], capture_output=True, text=True
-            )
-
-            health["exists"] = result.returncode == 0
-
-            if health["exists"]:
-                # Count panes
-                result = subprocess.run(
-                    ["tmux", "list-panes", "-t", tmux_session, "-F", "#{pane_index}"],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode == 0:
-                    health["panes"] = len(result.stdout.strip().split("\n"))
-
-            else:
-                health["status"] = "missing"
-                health["issues"].append("Tmux session does not exist")
-
-        except subprocess.CalledProcessError:
-            health["status"] = "error"
-            health["issues"].append("Failed to check tmux session")
-
-        return health
-
+    
     def cleanup_context(self, context_name: str, force: bool = False) -> bool:
         """Clean up a team context"""
         context = self.get_context_details(context_name)
         if not context:
             print(f"Context '{context_name}' not found")
             return False
-
-        print(f"\nContext cleanup for: {context_name}")
-        print(f"Containers to remove: {len(context.containers)}")
-        for container in context.containers:
-            print(f"  - {container.name} ({container.status})")
-
-        if context.tmux_session:
-            print(f"Tmux session to remove: {context.tmux_session}")
-
-        if not force:
-            confirm = input(
-                "\nThis will permanently delete all session data. Continue? (type 'yes'): "
-            )
-            if confirm.lower() != "yes":
-                print("Cleanup cancelled")
-                return False
-
-        success = True
-
-        # Stop and remove containers
-        for container in context.containers:
-            try:
-                if container.running:
-                    print(f"Stopping {container.name}...")
-                    subprocess.run(
-                        ["docker", "stop", container.name], capture_output=True, check=True
-                    )
-
-                print(f"Removing {container.name}...")
-                subprocess.run(
-                    ["docker", "rm", "-f", container.name], capture_output=True, check=True
-                )
-
-            except subprocess.CalledProcessError as e:
-                print(f"Error removing {container.name}: {e}")
-                success = False
-
-        # Remove tmux session
-        if context.tmux_session:
-            try:
-                print(f"Removing tmux session {context.tmux_session}...")
-                subprocess.run(
-                    ["tmux", "kill-session", "-t", context.tmux_session],
-                    capture_output=True,
-                    check=True,
-                )
-            except subprocess.CalledProcessError as e:
-                print(f"Error removing tmux session: {e}")
-                success = False
-
-        # Remove from core registry
-        try:
-            self.context_manager.delete_context(context_name)
+        
+        # Delegate to cleanup service
+        success = self.context_cleanup.cleanup_context(context, force)
+        
+        # Remove from registry
+        if success and self.context_persistence.delete_context(context_name):
             print(f"Removed session '{context_name}' from registry")
-        except Exception as e:
-            print(f"Warning: Could not remove from registry: {e}")
-
-        if success:
-            print(f"\nSession '{context_name}' cleanup completed successfully")
         else:
-            print(f"\nSession '{context_name}' cleanup completed with some errors")
-
+            print(f"Warning: Could not remove from registry")
+            success = False
+        
         return success
-
+    
     def export_session_config(self, context_name: str, output_file: str) -> bool:
         """Export session configuration to file"""
-        context = self.get_context_details(context_name)
-        if not context:
-            print(f"Context '{context_name}' not found")
-            return False
-
-        config = {
-            "context_name": context_name,
-            "export_date": datetime.now().isoformat(),
-            "containers": [asdict(container) for container in context.containers],
-            "tmux_session": context.tmux_session,
-            "metadata": {
-                "total_containers": context.total_containers,
-                "running_containers": context.running_containers,
-            },
-        }
-
-        try:
-            with open(output_file, "w") as f:
-                json.dump(config, f, indent=2)
+        result = self.context_persistence.save_to_file(context_name, output_file)
+        if result:
             print(f"Session configuration exported to {output_file}")
-            return True
-        except Exception as e:
-            print(f"Error exporting configuration: {e}")
-            return False
-
+        else:
+            print(f"Error: Could not export context '{context_name}'")
+        return result
+    
     def import_session_config(self, config_file: str) -> bool:
         """Import session configuration from file"""
-        try:
-            with open(config_file, "r") as f:
-                config = json.load(f)
-
-            print(f"Configuration loaded for session: {config['context_name']}")
-            print(f"Export date: {config['export_date']}")
-            print(f"Containers: {len(config['containers'])}")
-
-            # This would need orchestrator integration to actually recreate containers
-            print("Note: Import functionality requires orchestrator integration")
-            print("Configuration can be used as reference for manual recreation")
-
-            return True
-
-        except Exception as e:
-            print(f"Error importing configuration: {e}")
-            return False
-
+        result = self.context_persistence.load_from_file(config_file)
+        if result:
+            print(f"Configuration imported successfully")
+            print("Note: Containers need to be recreated manually")
+        else:
+            print(f"Error importing configuration from {config_file}")
+        return result
+    
     def list_teams(self) -> List[Dict[str, any]]:
         """List all available team configurations"""
-        loader = TeamConfigLoader()
         teams = []
-
+        
         # Search in all configured paths
-        for search_path in loader.search_paths:
+        for search_path in self.team_loader.search_paths:
             if not search_path.exists():
                 continue
-
+            
             # Look for config files
-            for team_dir in search_path.glob(f"*"):
+            for team_dir in search_path.glob("*"):
                 try:
                     # Try to load to validate
-                    config = loader.load_config(team_dir.name)
+                    config = self.team_loader.load_config(team_dir.name)
                     teams.append(
                         {
                             "name": team_dir.name,
@@ -587,108 +235,11 @@ class SessionCLIManager:
                 except Exception as e:
                     # Skip invalid configs
                     print(
-                        f"Warning: Skipping invalid config {config_file}: {e}", file=sys.stderr
+                        f"Warning: Skipping invalid config {team_dir.name}: {e}", file=sys.stderr
                     )
-
-        return teams
-
-    def _detect_smart_layout(self, num_agents: int) -> dict:
-        """Detect optimal layout based on terminal size and agent count"""
-        if num_agents != 5:
-            return None  # Only optimize for 5-agent teams
-            
-        try:
-            # Try to get terminal size
-            result = subprocess.run(['stty', 'size'], capture_output=True, text=True)
-            if result.returncode == 0:
-                rows, cols = map(int, result.stdout.strip().split())
-                print(f"Terminal size detected: {cols}x{rows}")
-                
-                # Check if terminal is large enough for 2x3 grid
-                if cols >= 240 and rows >= 48:
-                    layout = {
-                        "type": "grid",
-                        "agent_count": 5,
-                        "grid_rows": 2,
-                        "grid_cols": 3
-                    }
-                    print("Using 2x3 grid layout for large terminal")
-                    return layout
-                elif cols >= 150:
-                    # Use custom 2+3 layout for medium terminals
-                    from src.layout_manager import CustomSplit, SplitDirection
-                    layout = {
-                        "type": "custom",
-                        "agent_count": 5,
-                        "custom_splits": [
-                            # First: split horizontally to create top/bottom (40% top, 60% bottom for 2:3 ratio)
-                            CustomSplit(target_pane=0, direction=SplitDirection.VERTICAL, size_percent=60),
-                            # Second: split bottom pane into 3 (split at 33%)
-                            CustomSplit(target_pane=1, direction=SplitDirection.HORIZONTAL, size_percent=33),
-                            # Third: split remaining bottom into 2 (split at 50%)
-                            CustomSplit(target_pane=2, direction=SplitDirection.HORIZONTAL, size_percent=50),
-                            # Fourth: split top pane into 2
-                            CustomSplit(target_pane=0, direction=SplitDirection.HORIZONTAL, size_percent=50),
-                        ]
-                    }
-                    print("Using custom 2+3 layout for medium terminal")
-                    return layout
-                else:
-                    # Fallback to horizontal for small terminals
-                    print("Terminal too small for grid, using horizontal layout")
-                    return {"type": "horizontal"}
-            else:
-                # If can't detect size, use custom 2+3 layout as default
-                from src.layout_manager import CustomSplit, SplitDirection
-                layout = {
-                    "type": "custom",
-                    "agent_count": 5,
-                    "custom_splits": [
-                        CustomSplit(target_pane=0, direction=SplitDirection.VERTICAL, size_percent=60),
-                        CustomSplit(target_pane=1, direction=SplitDirection.HORIZONTAL, size_percent=33),
-                        CustomSplit(target_pane=2, direction=SplitDirection.HORIZONTAL, size_percent=50),
-                        CustomSplit(target_pane=0, direction=SplitDirection.HORIZONTAL, size_percent=50),
-                    ]
-                }
-                print("Could not detect terminal size, using custom 2+3 layout")
-                return layout
-        except Exception as e:
-            print(f"Layout detection failed: {e}, using default")
-            return None
-
-    def _get_intelligent_model(self, agent_name: str, agent_role: str) -> str:
-        """Get intelligent model assignment based on agent role"""
-        # High-complexity roles get Opus
-        if any(keyword in agent_role.lower() or keyword in agent_name.lower() 
-               for keyword in ["architect", "lead"]):
-            return "opus"
-        # Implementation roles get Opus
-        elif any(keyword in agent_role.lower() or keyword in agent_name.lower() 
-                 for keyword in ["developer", "implementation", "coding"]):
-            return "opus"
-        # Standard roles get Sonnet  
-        else:
-            return "sonnet"
-
-    def _find_available_port(self, start_port: int, max_attempts: int = 10) -> int:
-        """Find an available port starting from start_port"""
-        import socket
-        for port_offset in range(max_attempts):
-            test_port = start_port + port_offset
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.bind(('', test_port))
-                sock.close()
-                if test_port != start_port:
-                    print(f"Port {start_port} is busy, using port {test_port} instead")
-                return test_port
-            except OSError:
-                continue
-            finally:
-                sock.close()
         
-        raise RuntimeError(f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}")
-
+        return teams
+    
     def launch_team(
         self,
         team_name: str,
@@ -698,340 +249,87 @@ class SessionCLIManager:
         force: bool = False,
         debug: bool = False,
         task: str = None,
+        auto_cleanup: bool = True,
     ) -> bool:
         """Launch a team configuration"""
-        # Load team configuration
-        loader = TeamConfigLoader()
-        team_config = loader.load_config(team_name)
-
-        # Validate configuration
-        errors = loader.validate_config(team_config)
-        if errors:
-            print("Configuration validation errors:")
-            for error in errors:
-                print(f"  - {error}")
-            return False
-
-        # Apply overrides
-        if context_name:
-            team_config.settings["default_context_name"] = context_name
-        else:
-            context_name = team_config.settings.get("default_context_name", "team-context")
-
-        if context_name and self.context_manager.get_context(context_name) is not None:
-            if not force:
-                raise ValueError(f"Context '{context_name}' already exists")
-            else:
-                print(f"Forcing launch of team '{team_name}' to existing context '{context_name}', deleting existing context...")
-                self.cleanup_context(context_name, force=True)
-
-        print(f"Launching team: {team_config.name}")
-        print(f"Context: {context_name}")
-        print(f"Agents: {len(team_config.agents)}")
-
-        # Create orchestrator config
-        orc_config = OrchestratorConfig(context_name=context_name, poll_interval=0.5)
-
-        # Choose orchestrator type
-        orchestrator_type = team_config.settings.get("orchestrator_type", "enhanced")
-        if orchestrator_type == "enhanced":
-            orchestrator = EnhancedOrchestrator(orc_config)
-        else:
-            orchestrator = Orchestrator(orc_config)
-
-        # Override create_session to use force parameter and smart layout
-        original_create_session = orchestrator.tmux.create_session
-
-        team_force = force
-        def create_session_with_layout(num_panes, force=None, layout=None):
-            if force is None:
-                force = team_force
-            # Use smart layout if available and not explicitly specified
-            if layout is None:
-                layout = self._detect_smart_layout(num_panes)
-            return original_create_session(num_panes, force=force, layout=layout)
-
-        orchestrator.tmux.create_session = create_session_with_layout
-
-        # Find available MCP port with auto-discovery
-        desired_port = team_config.settings.get("mcp_port", 8765)
-        mcp_port = self._find_available_port(desired_port)
+        # Handle forced context cleanup here if needed
+        if force and context_name and self.context_persistence.get_context(context_name):
+            print(f"Forcing cleanup of existing context '{context_name}'...")
+            self.cleanup_context(context_name, force=True)
         
-        # Create MCP server
-        mcp_server = CentralMCPServer(orchestrator, port=mcp_port)
-        mcp_server_loop = None
-        mcp_thread = None
-        shutdown_event = threading.Event()
-
-        # Start MCP server in background thread
-        def run_mcp_server():
-            nonlocal mcp_server_loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            mcp_server_loop = loop
-
-            async def start_server():
-                await mcp_server.start()
-                while not shutdown_event.is_set():
-                    await asyncio.sleep(0.1)
-
-            loop.run_until_complete(start_server())
-            loop.close()
-
-        mcp_thread = threading.Thread(target=run_mcp_server, daemon=True)
-        mcp_thread.start()
-
-        # Wait for MCP server to be ready
-        time.sleep(2)
-
-        # Register agents with orchestrator
-        agent_configs = dict()
-        for i, agent_config in enumerate(team_config.agents):
-            # Determine model to use with intelligent assignment
-            model = agent_config.model
-            if model_override:
-                model = model_override
-            elif agent_model_overrides and agent_config.name in agent_model_overrides:
-                model = agent_model_overrides[agent_config.name]
-            elif not model:
-                # Use intelligent model assignment if no explicit model
-                model = self._get_intelligent_model(agent_config.name, agent_config.role)
-
-            agent_name_sanitized = agent_config.name.lower().replace(" ", "-")
-            if context_name:
-                claude_instance = f"{context_name}-{agent_name_sanitized}"
-            else:
-                claude_instance = agent_name_sanitized
-
-            # Create agent prompt with task injection for Architect
-            prompt = agent_config.prompt or f"You are {agent_config.name}, with role: {agent_config.role}"
-            if task and agent_config.name.lower() == "architect":
-                task_context = f"\n\nInitial task from user: {task}"
-                prompt += task_context
-                print(f"Task injected into Architect prompt: {task}")
-
-            print(f"Registering agent: {agent_config.name} ({agent_config.role}) - Model: {model}")
-
-            # Register agent with orchestrator
-            session_id = f"session_{i}"
-            agent = orchestrator.register_agent(agent_config.name, session_id, prompt)
-
-            # Track agent config for team context
-            agent_configs[agent_config.name] = {
-                "name": agent_config.name,
-                "instance_name": claude_instance,
-                "role": agent_config.role,
-                "model": model,  # Use the actual resolved model
-                "prompt": agent_config.prompt,
-                "prompt_file": agent_config.prompt_file,
-                "pane_index": agent.pane_index,
-            }
-
-        # Configure launcher for model overrides
-        if model_override or agent_model_overrides or debug or context_name:
-            original_build = ClaudeLauncherConfig.build_command_string
-
-            def patched_build(agent_name, session_id, system_prompt, mcp_config_path=None):
-                # Determine model for this agent
-                model = agent_configs[agent_name]["model"]
-
-                # Build command with model and debug
-                cmd = original_build(agent_configs[agent_name]["instance_name"], session_id, system_prompt, mcp_config_path)
-                if model:
-                    cmd = cmd.replace("ccdk", f"ccdk --model {model}", 1)
-                if debug:
-                    cmd = cmd.replace("ccdk", "ccdk --debug", 1)
-
-                return cmd
-
-            ClaudeLauncherConfig.build_command_string = patched_build
-
-        # Setup graceful shutdown handling
-        def signal_handler(signum, frame):
-            """Handle Ctrl+C gracefully"""
-            print("\n\nReceived interrupt signal. Shutting down gracefully...")
-            shutdown_event.set()
-            
-            # Stop orchestrator first
-            if orchestrator and orchestrator.running:
-                orchestrator.stop()
-            
-            # Stop MCP server gracefully  
-            if mcp_server_loop and not mcp_server_loop.is_closed():
-                # Cancel all tasks in the event loop
-                def shutdown_loop():
-                    # Cancel all running tasks
-                    tasks = asyncio.all_tasks(mcp_server_loop)
-                    for task in tasks:
-                        task.cancel()
-                    mcp_server_loop.stop()
-                
-                mcp_server_loop.call_soon_threadsafe(shutdown_loop)
-                
-                # Give the thread a moment to clean up
-                if mcp_thread and mcp_thread.is_alive():
-                    mcp_thread.join(timeout=2.0)
-            
-            # Exit cleanly
-            sys.exit(0)
-
-        # Register signal handler
-        signal.signal(signal.SIGINT, signal_handler)
-
-        try:
-            # Start the orchestrator
-            print(f"\nStarting orchestrator with {len(team_config.agents)} agents...")
-            orchestrator.start(mcp_port=mcp_port)
-
-            # Register team context for persistence
-            if context_name:
-                agents = []
-                tmux_session = orchestrator.tmux.session_name
-
-                # Get container names from environment
-                for agent_cfg in agent_configs.values():
-                    container_name = f"ccbox-{agent_cfg['instance_name']}"
-                    agents.append(TeamContextAgentInfo(
-                        name=agent_cfg["name"],
-                        container=container_name,
-                        model=agent_cfg["model"],
-                        pane_index=agent_cfg["pane_index"]
-                    ))
-
-                # Create team context
-                self.context_manager.create_context(
-                    context_name=context_name,
-                    agents=agents,
-                    tmux_session=tmux_session,
-                )
-
-                print(f"Team context '{context_name}' registered for persistence")
-
-            # Rich status output
-            print(f"""
-============================================================
-Enhanced Team Launch - {team_config.name}
-============================================================
-
-✓ Team launched successfully!
-✓ MCP server running on port {mcp_port}
-✓ Debug mode: {'enabled' if debug else 'disabled'}
-
-Team Layout: {'Auto-selected based on terminal size' if len(team_config.agents) == 5 else 'Default layout'}
-  • Smart layout detection for 5-agent teams
-  • Adaptive layout based on terminal dimensions
-
-Team Members & Models:
-""")
-            for agent_cfg in agent_configs.values():
-                print(f"  • {agent_cfg['name']} ({agent_cfg['role']}) - Model: {agent_cfg['model']}")
-
-            print(f"""
-Capabilities:
-  • Read: Full codebase access (src/, tests/, docs/)
-  • Write: Limited to .temp/ directory for experiments
-  • Execute: Tests and development commands
-  • MCP Communication: Inter-agent messaging
-
-{f"Initial Task: {task}" if task else "The team will self-organize and identify improvements."}
-
-Tmux session: {orchestrator.tmux.session_name}
-Attach with: tmux attach -t {orchestrator.tmux.session_name}
-
-Press Ctrl+C to stop
-""")
-
-            # Wait for interrupt
-            try:
-                while orchestrator.running:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("\nShutting down...")
-
-        finally:
-            # Cleanup
-            if orchestrator and orchestrator.running:
-                orchestrator.stop()
-
-            shutdown_event.set()
-            if mcp_thread and mcp_thread.is_alive():
-                mcp_thread.join(timeout=2.0)
-
-        return True
+        # Delegate to team launch service
+        return self.team_launch.launch_team(
+            team_name=team_name,
+            context_name=context_name,
+            model_override=model_override,
+            agent_model_overrides=agent_model_overrides,
+            force=force,
+            debug=debug,
+            task=task,
+            auto_cleanup=auto_cleanup,
+        )
 
 
+# Utility functions kept for backward compatibility
 def print_teams_table(teams: List[Dict[str, any]]):
     """Print teams in a formatted table"""
-    if not teams:
-        print("No team configurations found")
-        return
-
-    print(f"\n{'Team Name':<20} {'Config Name':<25} {'Agents':<8} {'Directory':<15}")
-    print("-" * 75)
-
-    for team in sorted(teams, key=lambda t: t["name"]):
-        print(
-            f"{team['team_name']:<20} {team['name']:<25} "
-            f"{team['agents']:<8} {team['directory']:<15}"
-        )
+    from src.cli.teams_command import TeamsListSubcommand
+    cmd = TeamsListSubcommand()
+    cmd._print_teams_table(teams)
 
 
 def parse_agent_model_overrides(overrides_list: List[str]) -> Dict[str, str]:
     """Parse agent model override arguments"""
-    overrides = {}
-    for override in overrides_list:
-        if "=" not in override:
-            print(f"Warning: Invalid override format '{override}', expected Agent=model")
-            continue
-        agent, model = override.split("=", 1)
-        overrides[agent.strip()] = model.strip()
-    return overrides
+    from src.cli.launch_command import LaunchCommand
+    cmd = LaunchCommand()
+    return cmd._parse_agent_model_overrides(overrides_list)
 
 
 def print_sessions_table(contexts: Dict[str, ContextInfo]):
     """Print sessions in a formatted table"""
-    if not contexts:
-        print("No team contexts found")
-        return
-
-    print(
-        f"\n{'Session Name':<25} {'Containers':<12} "
-        f"{'Running':<8} {'Tmux':<15} {'Created':<20}"
-    )
-    print("-" * 85)
-
-    for context_name, context in sorted(contexts.items()):
-        tmux_status = "✓" if context.tmux_session else "-"
-        created = context.created[:19] if context.created else "Unknown"
-
-        print(
-            f"{context_name:<25} {context.total_containers:<12} "
-            f"{context.running_containers:<8} {tmux_status:<15} {created:<20}"
-        )
+    from src.cli.list_command import ListCommand
+    cmd = ListCommand()
+    cmd._print_sessions_table(contexts)
 
 
 def print_context_details(context: ContextInfo):
     """Print detailed session information"""
-    print(f"\nSession: {context.name}")
-    print(f"Created: {context.created}")
-    print(f"Containers: {context.total_containers} total, {context.running_containers} running")
-
-    if context.tmux_session:
-        print(f"Tmux session: {context.tmux_session}")
-    else:
-        print("Tmux session: None")
-
-    print("\nContainers:")
-    for container in context.containers:
-        status_icon = "🟢" if container.running else "🔴"
-        print(f"  {status_icon} {container.name}")
-        print(f"    Role: {container.agent_role}")
-        print(f"    Status: {container.status}")
-        print(f"    Created: {container.created}")
+    from src.cli.info_command import InfoCommand
+    cmd = InfoCommand()
+    cmd._print_context_details(context)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Manage Claude orchestrator sessions")
+    
+    # Import command registry
+    try:
+        from src.cli.command_registry import CommandRegistry
+        registry = CommandRegistry()
+    except ImportError:
+        print("Warning: Command registry not available, using legacy command handling")
+        # Fall back to old implementation
+        return main_legacy(parser)
+    
+    # Set up parser with commands
+    registry.setup_parser(parser)
+    
+    args = parser.parse_args()
+    
+    if not hasattr(args, 'command') or not args.command:
+        parser.print_help()
+        return
+    
+    # Create manager
+    manager = SessionCLIManager()
+    
+    # Execute command
+    exit_code = registry.execute_command(args, manager)
+    sys.exit(exit_code)
+
+
+def main_legacy(parser):
+    """Legacy main function for backward compatibility"""
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List sessions
@@ -1088,6 +386,7 @@ def main():
     )
     launch_parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     launch_parser.add_argument("--task", help="Initial task for the team (will be added to Architect prompt)")
+    launch_parser.add_argument("--no-auto-cleanup", action="store_true", help="Disable automatic context cleanup on exit")
 
     args = parser.parse_args()
 
@@ -1163,6 +462,7 @@ def main():
             force=args.force,
             debug=args.debug,
             task=args.task,
+            auto_cleanup=not args.no_auto_cleanup,
         )
 
         if not success:

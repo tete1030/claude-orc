@@ -18,7 +18,7 @@ class TestMCPMessageDelivery(unittest.TestCase):
         """Set up test fixtures"""
         # Create enhanced orchestrator
         self.config = OrchestratorConfig(
-            session_name="test-session",
+            context_name="test-session",
             poll_interval=0.1
         )
         
@@ -60,7 +60,7 @@ class TestMCPMessageDelivery(unittest.TestCase):
         """Test fallback when enhanced delivery not available"""
         # Create a fresh orchestrator without enhanced features
         config = OrchestratorConfig(
-            session_name="test-session",
+            context_name="test-session",
             poll_interval=0.1
         )
         

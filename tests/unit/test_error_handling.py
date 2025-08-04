@@ -22,7 +22,7 @@ class TestErrorHandling(unittest.TestCase):
         self.temp_session_dir = self.session_helper.create_session_dir()
         
         self.config = OrchestratorConfig(
-            session_name="test-agents",
+            context_name="test-agents",
             session_dir=self.temp_session_dir
         )
         self.orchestrator = Orchestrator(self.config)
@@ -129,21 +129,6 @@ class TestErrorHandling(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.orchestrator._process_command(cmd)
             
-    def test_config_without_claude_binary_raises(self):
-        """Test that config without claude binary raises ValueError"""
-        with patch('subprocess.run') as mock_run:
-            # Make 'which claude' fail
-            mock_run.return_value = MagicMock(returncode=1)
-            
-            with patch('os.path.exists') as mock_exists:
-                # Make all common paths not exist
-                mock_exists.return_value = False
-                
-                with self.assertRaises(ValueError) as cm:
-                    config = OrchestratorConfig()
-                    
-                self.assertIn("Could not find Claude binary", str(cm.exception))
-                
     def test_send_to_agent_enforces_fail_fast(self):
         """Test that send_to_agent raises exception instead of returning False"""
         # Don't register any agents

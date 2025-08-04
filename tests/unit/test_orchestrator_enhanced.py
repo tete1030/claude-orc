@@ -18,7 +18,7 @@ class TestEnhancedOrchestrator(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.config = OrchestratorConfig(
-            session_name="test-session",
+            context_name="test-session",
             poll_interval=0.1
         )
         

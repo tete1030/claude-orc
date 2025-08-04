@@ -252,17 +252,42 @@ See the `examples/` directory for:
 ```
 orchestrator/
 ├── src/
-│   ├── orchestrator.py       # Main orchestrator
-│   ├── tmux_manager.py       # Tmux operations
-│   ├── session_monitor.py    # Session file monitoring
-│   ├── simple_launcher.py    # Claude launcher
-│   └── main.py              # CLI entry point
+│   ├── orchestrator.py          # Main orchestrator
+│   ├── orchestrator_enhanced.py # Enhanced orchestrator with state monitoring
+│   ├── tmux_manager.py          # Tmux operations
+│   ├── mcp_central_server.py    # MCP server for agent communication
+│   ├── team_context_manager.py  # Team context persistence
+│   ├── team_config_loader.py    # YAML/JSON team configuration
+│   ├── services/                # Refactored service components
+│   │   ├── container_discovery_service.py  # Docker container discovery
+│   │   ├── container_health_service.py     # Container health checks
+│   │   ├── context_cleanup_service.py      # Context cleanup operations
+│   │   ├── context_persistence_service.py  # Context save/load operations
+│   │   ├── layout_detection_service.py     # Smart terminal layout detection
+│   │   ├── mcp_server_manager.py          # MCP server lifecycle management
+│   │   ├── orchestrator_factory.py        # Orchestrator configuration factory
+│   │   ├── port_discovery_service.py      # Available port discovery
+│   │   ├── signal_handler_service.py      # Graceful shutdown handling
+│   │   ├── team_launch_service.py         # Team launching orchestration
+│   │   └── tmux_management_service.py     # Tmux session management
+│   └── cli/                     # CLI command implementations
+│       ├── base_command.py      # Abstract command base class
+│       ├── command_registry.py  # Command registration and dispatch
+│       └── *_command.py         # Individual command implementations
+├── bin/
+│   ├── ccorc                   # Team context management CLI
+│   ├── ccdk                    # Docker container management
+│   └── claude-bg               # Background process manager
 ├── tests/
-│   ├── unit/                # Unit tests
-│   └── integration/         # Integration tests
-├── examples/                # Example scripts
-├── docs/                    # Documentation
-└── scripts/                 # Utility scripts
+│   ├── unit/                   # Unit tests
+│   └── integration/            # Integration tests
+├── examples/
+│   └── teams/                  # Pre-configured team examples
+│       ├── devops-team/        # 5-agent DevOps team
+│       ├── security-team/      # Security analysis team
+│       └── data-team/          # Data engineering team
+├── docs/                       # Documentation
+└── scripts/                    # Utility scripts
 ```
 
 ## Docker Environment (CCBox)
