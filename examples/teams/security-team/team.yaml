@@ -26,34 +26,3 @@ settings:
   poll_interval: 0.3
   mcp_port: 8767
   debug: true
-  container_mode: "isolated"
-
-workflow:
-  coordination_rules:
-    - "Security-first approach - all decisions must consider security implications"
-    - "Threat modeling before implementation - Security Architect leads analysis"
-    - "Security validation - Security Analyst validates all threat assessments"
-    - "Secure coding practices - Developer implements with security controls"
-    - "Security testing - QA performs penetration testing and vulnerability assessment"
-    - "No deployment without security approval"
-  
-  communication_patterns:
-    - "Security Architect broadcasts security policies and threat updates"
-    - "Security Analyst reports threat intelligence and risk assessments"
-    - "Developer reports security implementation status"
-    - "QA provides security test results and vulnerability reports"
-    - "All team members escalate security concerns immediately"
-
-security_focus:
-  primary_concerns:
-    - "Data protection and privacy"
-    - "Authentication and authorization"
-    - "Secure communications"
-    - "Vulnerability management"
-    - "Incident response"
-  
-  compliance_frameworks:
-    - "OWASP Top 10"
-    - "NIST Cybersecurity Framework"
-    - "SOC 2"
-    - "ISO 27001"

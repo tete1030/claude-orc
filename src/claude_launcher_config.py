@@ -14,27 +14,13 @@ class ClaudeLauncherConfig:
     DOCKER_SCRIPT = "ccdk"
     
     @classmethod
-    def build_command(cls, instance_name: str, session_id: str, system_prompt: str, 
-                     mcp_config_path: Optional[str] = None) -> List[str]:
-        """Build the Claude launch command as a list of arguments"""
-        cmd = [
-            "env",
-            f"CLAUDE_INSTANCE={instance_name}",
-            "CLAUDE_CONTAINER_MODE=isolated",
-            cls.DOCKER_SCRIPT,
-            "run",
-            "--session-id", session_id,
-            "--append-system-prompt", system_prompt
-        ]
-        
-        if mcp_config_path:
-            cmd.extend(["--mcp-config", mcp_config_path])
-            
-        return cmd
-    
-    @classmethod
-    def build_command_string(cls, instance_name: str, session_id: str, system_prompt: str,
-                           mcp_config_path: Optional[str] = None) -> str:
+    def build_command_string(cls,
+        instance_name: str,
+        session_id: str,
+        system_prompt: str,
+        resume: bool,
+        mcp_config_path: Optional[str] = None,
+    ) -> str:
         """Build the command as a shell-ready string"""
         # Build the base command
         cmd_parts = [
@@ -43,15 +29,21 @@ class ClaudeLauncherConfig:
             "CLAUDE_CONTAINER_MODE=isolated",
             cls.DOCKER_SCRIPT,
             "run",
-            "--session-id", session_id,
-            "--append-system-prompt", shlex.quote(system_prompt)
         ]
+        
+        if resume:
+            cmd_parts.extend(["--resume", session_id])
+        else:
+            cmd_parts.extend([
+                "--session-id", session_id,
+                "--append-system-prompt", shlex.quote(system_prompt)
+            ])
         
         if mcp_config_path:
             cmd_parts.extend(["--mcp-config", mcp_config_path])
             
         return " ".join(cmd_parts)
-    
+
     @classmethod
     def verify_script_exists(cls) -> bool:
         """Verify the Docker script exists"""

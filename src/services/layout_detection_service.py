@@ -35,6 +35,20 @@ class LayoutDetectionService:
             
             self.logger.debug(f"Terminal size: {width}x{height}")
             
+            # Check if terminal is too small for the number of agents
+            # Each pane needs at least 3 lines (2 for content + 1 for border)
+            min_height_per_pane = 3
+            max_panes_for_height = height // min_height_per_pane
+            
+            if num_agents > max_panes_for_height:
+                self.logger.error(
+                    f"Terminal height {height} can only fit {max_panes_for_height} panes "
+                    f"(need {num_agents}). Each pane needs at least {min_height_per_pane} lines."
+                )
+                # For now, still try with a grid layout but warn the user
+                self.logger.warning("Attempting grid layout anyway, but panes will be very small!")
+                return {"type": "grid"}
+            
             if width < self.MIN_WIDTH or height < self.MIN_HEIGHT:
                 self.logger.warning(
                     f"Terminal too small ({width}x{height}), using fallback layout"
@@ -140,9 +154,22 @@ class LayoutDetectionService:
         like main-horizontal with the coordinator larger.
         """
         if num_agents == 5:
-            return {
-                "type": "main-horizontal"
-            }
+            # Check if terminal is large enough for main-horizontal with 5 panes
+            # We need at least 5 lines per pane (25 total) plus borders
+            min_height_needed = 30
+            if height >= min_height_needed:
+                return {
+                    "type": "main-horizontal"
+                }
+            else:
+                # Fall back to grid for small terminals
+                self.logger.warning(
+                    f"Terminal height {height} too small for main-horizontal with 5 panes "
+                    f"(need {min_height_needed}+), using grid layout"
+                )
+                return {
+                    "type": "grid"
+                }
         else:
             return {
                 "type": "grid"

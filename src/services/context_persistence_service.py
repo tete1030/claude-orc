@@ -281,6 +281,53 @@ class ContextPersistenceService:
             self.logger.error(f"Failed to load context from file: {e}")
             return False
     
+    def update_context(
+        self,
+        context_name: str,
+        agents: Optional[List[TeamContextAgentInfo]] = None,
+        tmux_session: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Update an existing team context.
+        
+        Args:
+            context_name: Name of the context to update
+            agents: Updated list of agents (optional)
+            tmux_session: Updated tmux session name (optional)
+            metadata: Updated metadata (optional)
+            
+        Returns:
+            True if updated successfully
+        """
+        try:
+            # Prepare kwargs for update
+            update_kwargs = {}
+            
+            if agents is not None:
+                update_kwargs['agents'] = agents
+            
+            if tmux_session is not None:
+                update_kwargs['tmux_session'] = tmux_session
+            
+            # Add metadata fields directly to kwargs
+            if metadata is not None:
+                update_kwargs.update(metadata)
+            
+            # Use the existing update_context method from TeamContextManager
+            updated_context = self.context_manager.update_context(context_name, **update_kwargs)
+            
+            if updated_context:
+                self.logger.info(f"Updated context '{context_name}'")
+                return True
+            else:
+                self.logger.error(f"Context '{context_name}' not found")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to update context '{context_name}': {e}")
+            return False
+    
     def update_context_metadata(
         self, 
         context_name: str, 
@@ -298,28 +345,17 @@ class ContextPersistenceService:
         Returns:
             True if updated successfully
         """
-        context_data = self.context_manager.get_context(context_name)
-        if not context_data:
-            return False
-        
         try:
-            if merge:
-                # Merge with existing metadata
-                for key, value in metadata.items():
-                    context_data[key] = value
+            # Use the update_context method with metadata
+            updated_context = self.context_manager.update_context(context_name, **metadata)
+            
+            if updated_context:
+                self.logger.info(f"Updated metadata for context '{context_name}'")
+                return True
             else:
-                # Replace all non-core fields
-                core_fields = {"agents", "tmux_session", "created_at", "containers"}
-                # Remove old metadata
-                for key in list(context_data.keys()):
-                    if key not in core_fields:
-                        del context_data[key]
-                # Add new metadata
-                context_data.update(metadata)
-            
-            self.context_manager._save_registry()
-            return True
-            
+                self.logger.error(f"Context '{context_name}' not found")
+                return False
+                
         except Exception as e:
             self.logger.error(f"Failed to update context metadata: {e}")
             return False

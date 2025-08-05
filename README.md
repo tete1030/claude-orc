@@ -21,6 +21,7 @@ This orchestrator enables multiple Claude agents to work together by:
 - **Intelligent Notifications**: Sends messages directly to agent TUI when they're idle and ready
 - **Message Queueing**: Holds messages for busy agents and delivers when they become available
 - **Team Context Persistence**: Team contexts survive container restarts and system reboots
+- **Session Persistence**: Claude conversations automatically resume after team restarts
 - **Docker Integration**: Runs agents in isolated containers with shared communication directory
 - **Model Selection**: Choose Claude model via command line (defaults to Sonnet)
 - **Debug Control**: Enable/disable debug mode as needed
@@ -65,11 +66,16 @@ Get started with team-based configuration in seconds:
 # List available teams
 ccorc teams list
 
-# Launch the DevOps team
+# Launch the DevOps team (auto-resumes existing sessions)
 ccorc launch --team devops-team
 
 # Launch with custom session name
 ccorc launch --team devops-team --session my-project
+
+# Stop and resume workflow
+ccorc stop my-project                     # Stop the team
+ccorc launch --team devops-team           # Auto-resumes conversations
+ccorc launch --team devops-team --fresh   # Force new sessions
 ```
 
 This launches a complete team (Architect, Developer, QA, DevOps, Docs) with intelligent message delivery, agent state detection, and automatic notifications.

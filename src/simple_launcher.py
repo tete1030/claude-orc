@@ -21,13 +21,38 @@ class SimpleLauncher:
         self.logger = logging.getLogger(__name__)
         self.shared_mcp_dir: Optional[str] = None  # Will be set by orchestrator
         
-    def launch_agent(self, pane_index: int, agent_name: str, system_prompt: str, 
+    def launch_agent(self,
+                    pane_index: int,
+                    agent_name: str,
+                    system_prompt: str,
                     mcp_config: Optional[Dict[str, Any]] = None,
-                    mcp_config_path: Optional[str] = None, working_dir: Optional[str] = None) -> Optional[str]:
-        """Launch agent with explicit session ID and return it"""
-        # Generate session ID upfront
-        session_id = str(uuid.uuid4())
-        self.logger.info(f"Launching {agent_name} with session ID: {session_id}")
+                    mcp_config_path: Optional[str] = None,
+                    working_dir: Optional[str] = None,
+                    session_id: Optional[str] = None
+                    ) -> Optional[str]:
+        """Launch agent with explicit session ID and return it
+        
+        Args:
+            pane_index: Tmux pane index
+            agent_name: Name of the agent
+            system_prompt: System prompt to use
+            mcp_config: MCP configuration dict
+            mcp_config_path: Path to MCP config file
+            working_dir: Working directory to change to
+            session_id: Session ID to resume
+            
+        Returns:
+            Session ID if successful, None otherwise
+        """
+        resume = False
+        # Handle session ID logic
+        if session_id:
+            resume = True
+            self.logger.info(f"Resuming {agent_name} with session ID: {session_id}")
+        else:
+            # Generate new session ID if not provided
+            session_id = str(uuid.uuid4())
+            self.logger.info(f"Launching {agent_name} with new session ID: {session_id}")
         
         # Verify Docker script exists
         if not ClaudeLauncherConfig.verify_script_exists():
@@ -47,32 +72,33 @@ class SimpleLauncher:
             ])
             time.sleep(0.1)
             
-        # Build command using shared config
+        # Build command based on resume vs new session
         cmd = ClaudeLauncherConfig.build_command_string(
-            agent_name=agent_name,
+            instance_name=agent_name,
             session_id=session_id,
             system_prompt=system_prompt,
+            resume=resume,
             mcp_config_path=mcp_config_path
         )
         
-        if mcp_config_path:
-            self.logger.info(f"Launching with MCP config: {mcp_config_path}")
-            # Log the MCP config content for debugging
-            try:
-                with open(mcp_config_path, 'r') as f:
-                    self.logger.debug(f"MCP config content: {f.read()}")
-            except Exception as e:
-                self.logger.error(f"Failed to read MCP config: {e}")
-        
         # Send command to pane
         self.logger.info(f"Sending command: {cmd}")
+        
+        # Send the command using literal mode to handle special characters
         self.tmux._run_command([
             "tmux", "send-keys", "-t",
             f"{self.tmux.session_name}:0.{pane_index}",
-            cmd, "Enter"
+            "-l", cmd
+        ])
+        # Send Enter separately
+        self.tmux._run_command([
+            "tmux", "send-keys", "-t",
+            f"{self.tmux.session_name}:0.{pane_index}",
+            "Enter"
         ])
         
         # Wait for Claude to be ready
+        # TODO: remove this stupidity
         if self._wait_for_claude_ready(pane_index, agent_name):
             self.logger.info(f"Successfully launched {agent_name} with session {session_id}")
             if mcp_config_path:
@@ -116,7 +142,7 @@ class SimpleLauncher:
                 
             # Check if Claude is ready
             if any(indicator in content for indicator in [
-                "Welcome to Claude Code!",
+                "Welcome to Claude Code",  # Remove the ! to handle both versions
                 "Tips for getting started:",
                 "│ >",  # Box drawing character with prompt
                 "claude-code-interactive",
@@ -153,13 +179,14 @@ class SimpleLauncher:
     def _create_mcp_config_file(self, agent_name: str, config: Dict[str, Any]) -> str:
         """Create temporary MCP config file for agent"""
         # Use shared directory for cross-container access
-        mcp_dir = self.shared_mcp_dir or "/tmp/claude-orc/mcp_configs"
+        if not self.shared_mcp_dir:
+            raise ValueError("shared_mcp_dir is not set")
         
         # Ensure directory exists
-        os.makedirs(mcp_dir, exist_ok=True)
+        os.makedirs(self.shared_mcp_dir, exist_ok=True)
         
         # Write config to file
-        config_path = os.path.join(mcp_dir, f"mcp_{agent_name}_{uuid.uuid4().hex[:8]}.json")
+        config_path = os.path.join(self.shared_mcp_dir, f"mcp_{agent_name}_{uuid.uuid4().hex[:8]}.json")
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
         

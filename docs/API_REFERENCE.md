@@ -30,7 +30,7 @@ Register a new agent with the orchestrator.
 
 **Parameters:**
 - `name` (str): Unique name for the agent (case-insensitive for routing)
-- `session_id` (str): Placeholder value (will be auto-generated)
+- `session_id` (str): Claude session ID
 - `system_prompt` (str): System prompt containing agent instructions
 - `working_dir` (Optional[str]): Working directory for the agent
 
@@ -38,7 +38,7 @@ Register a new agent with the orchestrator.
 ```python
 orc.register_agent(
     name="DataProcessor",
-    session_id="placeholder",
+    session_id="session-id",
     system_prompt="You are a data processing agent...",
     working_dir="/path/to/data"
 )
@@ -292,7 +292,7 @@ orc = Orchestrator(config)
 # Register agents
 orc.register_agent(
     name="Coordinator",
-    session_id="placeholder",
+    session_id="session-id",
     system_prompt="""You coordinate tasks between agents.
     
 To delegate work:
@@ -304,7 +304,7 @@ To check responses:
 
 orc.register_agent(
     name="Worker",
-    session_id="placeholder", 
+    session_id="session-id", 
     system_prompt="""You execute assigned tasks.
     
 To check assignments:

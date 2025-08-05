@@ -157,7 +157,7 @@ class TestErrorHandling(unittest.TestCase):
         mock_tmux = MockTmuxHelper.create_mock_tmux(success=True, session_ids=[session_id])
         self.orchestrator.tmux = mock_tmux
         
-        self.orchestrator.register_agent("agent1", "placeholder", "prompt")
+        self.orchestrator.register_agent("agent1", session_id, "prompt")
         self.orchestrator.start()
         
         # Let it run briefly - should not crash

@@ -25,6 +25,7 @@ class TeamContextAgentInfo:
     role: str  # Agent role (Architect, Developer, etc.)
     model: str = "sonnet"
     pane_index: Optional[int] = None
+    session_id: Optional[str] = None  # Claude Code session UUID for resuming
     
     
 @dataclass 
@@ -161,14 +162,10 @@ class TeamContextManager:
         """
         if context_name in self.contexts:
             raise ValueError(f"Context '{context_name}' already exists")
-            
-        # Extract container names
-        containers = [agent.container for agent in agents]
         
         # Create context object
         context = TeamContext(
             context_name=context_name,
-            containers=containers,
             tmux_session=tmux_session,
             created_at=datetime.now().isoformat(),
             agents=agents,
@@ -199,15 +196,9 @@ class TeamContextManager:
             
         context = self.contexts[context_name]
         
-        # Verify all containers exist
-        missing_containers = []
-        for container in context.containers:
-            if not self._check_container_exists(container):
-                missing_containers.append(container)
-                
-        if missing_containers:
-            raise ValueError(f"Missing containers for context '{context_name}': {missing_containers}")
-            
+        # Note: Container existence is checked at runtime via Docker discovery
+        # We no longer store container names in the context
+        
         # Update last accessed time
         context.updated_at = datetime.now().isoformat()
         self._save_registry()
@@ -260,7 +251,7 @@ class TeamContextManager:
         
         # Log what would be cleaned up (actual cleanup not implemented)
         self.logger.info(f"Cleaning up context '{context_name}'")
-        self.logger.info(f"Would remove containers: {context.containers}")
+        self.logger.info(f"Context has {len(context.agents)} agents")
         self.logger.info(f"Would kill tmux session: {context.tmux_session}")
         
         # Remove from registry

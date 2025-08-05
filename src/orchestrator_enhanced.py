@@ -91,28 +91,6 @@ class EnhancedOrchestrator(Orchestrator):
             
         self.logger.info("Enhanced orchestrator started with state monitoring")
         
-        # Print usage instructions
-        print("\n" + "="*60)
-        print("Orchestrator Started Successfully!")
-        print("="*60)
-        print("\nTo interact with the agents:")
-        print("1. Open a new terminal")
-        print("2. Attach to tmux session: tmux attach -t team-mcp-demo")
-        print("3. Switch between agents:")
-        print("   Fast switching (no prefix):")
-        print("   - F1 or Alt+1 → Leader")
-        print("   - F2 or Alt+2 → Researcher")
-        print("   - F3 or Alt+3 → Writer")
-        print("   - Click pane with mouse")
-        print("   Standard tmux navigation:")
-        print("   - Ctrl+b, 1 → Leader")
-        print("   - Ctrl+b, 2 → Researcher")
-        print("   - Ctrl+b, 3 → Writer")
-        print("4. Mouse support enabled - click to switch, scroll to navigate")
-        print("5. Use '?' in any pane to see Claude shortcuts")
-        print("6. Detach with Ctrl+b, d")
-        print("="*60 + "\n")
-        
         return True
         
     def _launch_agents_quickly(self, mcp_port: Optional[int] = None) -> bool:
@@ -147,37 +125,35 @@ class EnhancedOrchestrator(Orchestrator):
                     }
                 }
             
-            # Launch Claude
-            session_id = self.tmux.launch_claude_in_pane(
+            # Launch Claude - check if we should resume
+            launched_session_id = self.tmux.launch_claude_in_pane(
                 agent.pane_index,
                 agent.name,
                 agent.system_prompt,
                 agent.working_dir,
-                mcp_config=mcp_config
+                mcp_config=mcp_config,
+                session_id=agent.session_id
             )
-            
-            if session_id:
-                agent.session_id = session_id
-                agent.session_file = os.path.join(self.config.session_dir, f"{session_id}.jsonl")
-                self.logger.info(f"Agent {agent.name} launched with session ID: {session_id}")
-            else:
+
+            if not launched_session_id:
                 self.logger.error(f"Failed to launch agent {agent.name}")
                 return False
-                
+
+            agent.resumed = launched_session_id == agent.session_id
+            if launched_session_id != agent.session_id:
+                agent.session_id = launched_session_id
+                self.logger.info(f"Agent {agent.name} launched with session ID: {launched_session_id}")
+
+            agent.session_file = os.path.join(self.config.session_dir, f"{launched_session_id}.jsonl")
+
         self.logger.info("All agents launched")
         
-        # Send initial messages without delays
-        for agent in self.agents.values():
-            if mcp_port:
-                message = f"System initialized. You are {agent.name} agent with MCP tools available. Use 'list_agents' to see other agents."
-            else:
-                message = f"System initialized. You are {agent.name} agent. Ready to receive commands."
-            self.tmux.send_to_pane(agent.pane_index, message)
-            
         # Add welcome messages for MCP
         if mcp_port:
             with self._mailbox_lock:
-                for agent_name in self.agents:
+                for agent_name, agent in self.agents.items():
+                    if agent.resumed:
+                        continue
                     welcome_msg = {
                         "from": "System",
                         "to": agent_name,
@@ -185,6 +161,12 @@ class EnhancedOrchestrator(Orchestrator):
                         "timestamp": datetime.now().isoformat()
                     }
                     self.mailbox[agent_name].append(welcome_msg)
+        else:
+            for agent in self.agents.values():
+                if agent.resumed:
+                    continue
+                message = f"System initialized. You are {agent.name} agent. Ready to receive commands."
+                self.tmux.send_to_pane(agent.pane_index, message)
                     
         return True
         

@@ -92,8 +92,8 @@ class TestOrchestrator(unittest.TestCase):
         self.session_helper.create_session_file(self.temp_session_dir, session_id2)
         
         # Register agents
-        self.orchestrator.register_agent("agent1", "placeholder-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "placeholder-2", "prompt2")
+        self.orchestrator.register_agent("agent1", session_id1, "prompt1")
+        self.orchestrator.register_agent("agent2", session_id2, "prompt2")
         
         # Start orchestrator
         result = self.orchestrator.start()
@@ -484,7 +484,7 @@ class TestOrchestrator(unittest.TestCase):
         mock_monitor_class.return_value = mock_monitor
         
         # Register agent and start
-        self.orchestrator.register_agent("agent1", "placeholder", "prompt1")
+        self.orchestrator.register_agent("agent1", session_id, "prompt1")
         self.orchestrator.start()
         
         # Let monitor loop run briefly

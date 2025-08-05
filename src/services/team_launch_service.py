@@ -3,7 +3,10 @@ Team Launch Service
 
 Handles the complex process of launching team configurations.
 """
+import os
 import time
+import logging
+from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
 
 from src.team_config_loader import TeamConfigLoader
@@ -13,7 +16,7 @@ from .port_discovery_service import PortDiscoveryService
 from .orchestrator_factory import OrchestratorFactory, OrchestratorOptions
 from .mcp_server_manager import MCPServerManager
 from .signal_handler_service import SignalHandlerService
-from .context_persistence_service import ContextPersistenceService
+from .context_persistence_service import ContextDetails, ContextPersistenceService
 
 
 class TeamLaunchService:
@@ -35,6 +38,7 @@ class TeamLaunchService:
         self.context_persistence = context_persistence
         self.team_loader = TeamConfigLoader()
         self.cleanup_callback = cleanup_callback
+        self.logger = logging.getLogger(__name__)
     
     def launch_team(
         self,
@@ -46,6 +50,7 @@ class TeamLaunchService:
         debug: bool = False,
         task: Optional[str] = None,
         auto_cleanup: bool = True,
+        fresh: bool = False,
     ) -> bool:
         """Launch a team configuration"""
         # Load and validate team configuration
@@ -61,24 +66,28 @@ class TeamLaunchService:
         if context_name:
             team_config.settings["default_context_name"] = context_name
         else:
-            context_name = team_config.settings.get("default_context_name", "team-context")
+            context_name = team_config.settings.get("default_context_name", f"{team_name}")
         
-        # Check for existing context
-        if context_name and self.context_persistence.get_context(context_name) is not None:
-            if not force:
-                raise ValueError(f"Context '{context_name}' already exists")
-            else:
-                print(f"Forcing launch of team '{team_name}' to existing context '{context_name}'")
-                # Cleanup will be handled elsewhere
+        # Check for existing context and load session IDs if resuming
+        existing_context = None
+        if context_name:
+            existing_context = self.context_persistence.get_context(context_name)
+            if existing_context is not None:
+                print(f"Found existing context '{context_name}'")
         
         print(f"Launching team: {team_config.name}")
         print(f"Context: {context_name}")
         print(f"Agents: {len(team_config.agents)}")
+        if existing_context and not fresh:
+            print(f"Resume mode: Will attempt to resume existing sessions")
+        elif fresh:
+            print(f"Fresh mode: Creating new sessions")
         
         # Prepare agent configurations
         agent_configs = self._prepare_agent_configs(
             team_config, 
             context_name, 
+            existing_context if not fresh else None,
             model_override, 
             agent_model_overrides
         )
@@ -116,17 +125,30 @@ class TeamLaunchService:
         )
         
         # Register team context for persistence
+        # Only create new context if we're not resuming an existing one
         if context_name:
-            self._register_team_context(
-                context_name, 
-                team_config, 
-                agent_configs, 
-                orchestrator
-            )
+            if not existing_context:
+                self._register_team_context(
+                    context_name, 
+                    team_config, 
+                    agent_configs, 
+                    orchestrator
+                )
+            else:
+                self._update_team_context(
+                    context_name, 
+                    team_config, 
+                    agent_configs, 
+                    orchestrator
+                )
         
         # Start the orchestrator
         print(f"\nStarting orchestrator with {len(team_config.agents)} agents...")
         orchestrator.start(mcp_port=mcp_port)
+        
+        # Update context with actual session IDs after launch
+        if context_name:
+            self._update_team_context_session_ids(context_name, orchestrator)
         
         # Display launch status
         self._display_launch_status(team_config, agent_configs, mcp_port, debug, task, orchestrator)
@@ -148,22 +170,37 @@ class TeamLaunchService:
         self,
         team_config: Any,
         context_name: str,
-        model_override: Optional[str],
-        agent_model_overrides: Optional[Dict[str, str]]
+        context_details: Optional[ContextDetails] = None,
+        model_override: Optional[str] = None,
+        agent_model_overrides: Optional[Dict[str, str]] = None
     ) -> Dict[str, Dict[str, Any]]:
         """Prepare agent configurations"""
         agent_configs = {}
-        
+
+        context_agent_infos = {}
+        if context_details and context_details.agents:
+            for context_agent_info in context_details.agents:
+                context_agent_infos[context_agent_info.name] = context_agent_info
+
         for agent_config in team_config.agents:
+            session_id = None
+            if agent_config.name in context_agent_infos:
+                session_id = context_agent_infos[agent_config.name].session_id
+
             # Determine model to use
-            model = agent_config.model
-            if model_override:
-                model = model_override
-            elif agent_model_overrides and agent_config.name in agent_model_overrides:
+            model = None
+            if agent_model_overrides and agent_config.name in agent_model_overrides:
                 model = agent_model_overrides[agent_config.name]
+            elif model_override:
+                model = model_override
+            elif agent_config.model:
+                model = agent_config.model
+            elif team_config.settings.get("default_model"):
+                model = team_config.settings.get("default_model")
+            elif context_agent_infos.get(agent_config.name) and context_agent_infos[agent_config.name].model:
+                model = context_agent_infos[agent_config.name].model
             elif not model:
-                # Use intelligent model assignment if no explicit model
-                model = self._get_intelligent_model(agent_config.name, agent_config.role)
+                model = None
             
             agent_name_sanitized = agent_config.name.lower().replace(" ", "-")
             if context_name:
@@ -178,15 +215,10 @@ class TeamLaunchService:
                 "model": model,
                 "prompt": agent_config.prompt,
                 "prompt_file": agent_config.prompt_file,
+                "session_id": session_id,
             }
-        
+
         return agent_configs
-    
-    def _get_intelligent_model(self, agent_name: str, agent_role: str) -> str:
-        """Get default model assignment when none specified"""
-        # Return a sensible default without hardcoded role assumptions
-        # This should ideally come from configuration
-        return "sonnet"  # Default model for all roles
     
     def _register_agents(
         self,
@@ -201,17 +233,22 @@ class TeamLaunchService:
             prepared_config = agent_configs[agent_config.name]
             
             # Create agent prompt with task injection for Architect
-            prompt = agent_config.prompt or f"You are {agent_config.name}, with role: {agent_config.role}"
+            # FIXME: specify coordinator
+            prompt = agent_config.prompt
             if task and agent_config.name.lower() == "architect":
                 task_context = f"\n\nInitial task from user: {task}"
                 prompt += task_context
                 print(f"Task injected into Architect prompt: {task}")
             
-            print(f"Registering agent: {agent_config.name} ({agent_config.role}) - Model: {prepared_config['model']}")
+            # Check if we have session info for resume
+            session_id = prepared_config.get("session_id", None)
             
-            # Register agent with orchestrator
-            session_id = f"session_{i}"
-            agent = orchestrator.register_agent(agent_config.name, session_id, prompt)
+            agent = orchestrator.register_agent(
+                name=agent_config.name, 
+                session_id=session_id,
+                system_prompt=prompt,
+                working_dir=None
+            )
             
             # Update agent config with pane index for team context
             agent_configs[agent_config.name]["pane_index"] = agent.pane_index
@@ -271,7 +308,8 @@ class TeamLaunchService:
                 name=agent_cfg["name"],
                 role=agent_cfg["role"],
                 model=agent_cfg["model"],
-                pane_index=agent_cfg["pane_index"]
+                pane_index=agent_cfg["pane_index"],
+                session_id=orchestrator.agents[agent_cfg["name"]].session_id
             ))
         
         # Create team context using persistence service
@@ -282,7 +320,70 @@ class TeamLaunchService:
             metadata={"team_name": team_config.name}
         )
         
-        print(f"Team context '{context_name}' registered for persistence")
+        self.logger.info(f"Team context '{context_name}' registered for persistence")
+
+    def _update_team_context(
+        self,
+        context_name: str,
+        team_config: Any,
+        agent_configs: Dict[str, Dict[str, Any]],
+        orchestrator: Any
+    ) -> None:
+        """Update team context with actual session IDs after launch"""
+        # Get current context
+        context = self.context_persistence.get_context(context_name)
+        if not context:
+            self.logger.error(f"Could not find context '{context_name}' to update")
+            return
+
+        agents = []
+        for agent_cfg in agent_configs.values():
+            agents.append(TeamContextAgentInfo(
+                name=agent_cfg["name"],
+                role=agent_cfg["role"],
+                model=agent_cfg["model"],
+                pane_index=agent_cfg["pane_index"],
+                session_id=orchestrator.agents[agent_cfg["name"]].session_id
+            ))
+
+        self.context_persistence.update_context(
+            context_name=context_name,
+            agents=agents,
+            tmux_session=orchestrator.tmux.session_name,
+            metadata={"team_name": team_config.name}
+        )
+
+        self.logger.info(f"Team context '{context_name}' updated")
+        
+    def _update_team_context_session_ids(
+        self,
+        context_name: str,
+        orchestrator: Any
+    ) -> None:
+        """Update team context with actual session IDs after launch"""
+        # Get current context
+        context = self.context_persistence.get_context(context_name)
+        if not context:
+            self.logger.error(f"Could not find context '{context_name}' to update")
+            return
+            
+        # Update session IDs from orchestrator agents
+        updated = False
+        for agent_info in context.agents:
+            if agent_info.name in orchestrator.agents:
+                agent = orchestrator.agents[agent_info.name]
+                if agent.session_id:
+                    agent_info.session_id = agent.session_id
+                    updated = True
+                    print(f"  Updated {agent_info.name} with session ID: {agent.session_id}")
+        
+        # Save updated context
+        if updated:
+            self.context_persistence.update_context(
+                context_name,
+                agents=context.agents
+            )
+            self.logger.info(f"Team context '{context_name}' updated with session IDs")
     
     def _display_launch_status(
         self,

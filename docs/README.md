@@ -106,9 +106,9 @@ from src.orchestrator import Orchestrator, OrchestratorConfig
 config = OrchestratorConfig(session_name="my-agents")
 orc = Orchestrator(config)
 
-orc.register_agent(name="Agent1", session_id="placeholder", 
+orc.register_agent(name="Agent1", session_id="session-id", 
                    system_prompt="Your instructions...")
-orc.register_agent(name="Agent2", session_id="placeholder",
+orc.register_agent(name="Agent2", session_id="session-id",
                    system_prompt="Your instructions...")
 
 if orc.start():

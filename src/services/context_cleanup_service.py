@@ -22,6 +22,19 @@ class ContextCleanupService:
         
         for container in containers:
             try:
+                # First check if container still exists
+                check_result = subprocess.run(
+                    ["docker", "inspect", container.name],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False
+                )
+                
+                if check_result.returncode != 0:
+                    # Container doesn't exist (likely removed by --rm flag)
+                    print(f"Container {container.name} already removed (auto-cleanup)")
+                    continue
+                
                 if container.running:
                     print(f"Stopping {container.name}...")
                     subprocess.run(
@@ -40,8 +53,12 @@ class ContextCleanupService:
                 )
             
             except subprocess.CalledProcessError as e:
-                print(f"Error removing {container.name}: {e}")
-                success = False
+                # Check if it's because container doesn't exist
+                if "No such container" in str(e) or "No such object" in str(e):
+                    print(f"Container {container.name} already removed")
+                else:
+                    print(f"Error removing {container.name}: {e}")
+                    success = False
         
         return success
     

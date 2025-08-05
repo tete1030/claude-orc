@@ -69,14 +69,48 @@ class ContainerDiscoveryService:
                 return contexts
             
             # Phase 2: Batch inspect all containers at once
+            # Note: Some containers might disappear between ps and inspect (--rm containers)
+            # So we need to handle this gracefully
             inspect_result = subprocess.run(
                 ["docker", "inspect"] + container_names,
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,  # Don't fail if some containers are gone
             )
             
-            containers_data = json.loads(inspect_result.stdout)
+            # If all containers are gone, return empty
+            if inspect_result.returncode != 0:
+                # Check if it's because containers don't exist
+                if "No such object" in inspect_result.stderr:
+                    self.logger.info("Some containers disappeared during discovery (likely --rm containers)")
+                    # Try to inspect containers one by one to get what we can
+                    containers_data = []
+                    for container_name in container_names:
+                        single_inspect = subprocess.run(
+                            ["docker", "inspect", container_name],
+                            capture_output=True,
+                            text=True,
+                            check=False
+                        )
+                        if single_inspect.returncode == 0:
+                            try:
+                                data = json.loads(single_inspect.stdout)
+                                if data:
+                                    containers_data.extend(data)
+                            except json.JSONDecodeError:
+                                pass
+                    if not containers_data:
+                        return contexts
+                else:
+                    # Some other error
+                    raise subprocess.CalledProcessError(
+                        inspect_result.returncode, 
+                        inspect_result.args,
+                        output=inspect_result.stdout,
+                        stderr=inspect_result.stderr
+                    )
+            else:
+                containers_data = json.loads(inspect_result.stdout)
             
             # Process each container's data
             for container_data in containers_data:

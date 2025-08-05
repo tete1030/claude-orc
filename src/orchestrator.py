@@ -22,13 +22,14 @@ from .session_monitor import SessionMonitor, Command
 class Agent:
     """Represents an agent in the system"""
     name: str
-    session_id: str
+    session_id: Optional[str]
     pane_index: int
     session_file: str
     system_prompt: str
     working_dir: Optional[str] = None
     monitor: Optional[SessionMonitor] = None
     last_active: float = field(default_factory=time.time)
+    resumed: bool = False
 
 
 @dataclass
@@ -75,7 +76,7 @@ class Orchestrator:
             "context_status": self._handle_context_status,
         }
         
-    def register_agent(self, name: str, session_id: str, system_prompt: str,
+    def register_agent(self, name: str, session_id: Optional[str], system_prompt: str,
                       working_dir: Optional[str] = None) -> Agent:
         """Register a new agent"""
         agent = None
@@ -86,18 +87,14 @@ class Orchestrator:
             # Determine pane index
             pane_index = len(self.agents)
             
-            # Note: session_id is now just a placeholder - actual session ID 
-            # will be determined after Claude starts
-            session_file = None  # Will be set after we get actual session ID
-            
             # Create agent
             agent = Agent(
                 name=name,
-                session_id=session_id,  # Placeholder for now
+                session_id=session_id,
                 pane_index=pane_index,
                 session_file="",  # Will be updated after launch
                 system_prompt=system_prompt,
-                working_dir=working_dir
+                working_dir=working_dir,
             )
             
             self.agents[name] = agent
@@ -185,57 +182,43 @@ class Orchestrator:
                     }
                 }
             
-            # Launch Claude - this now returns the session ID
-            session_id = self.tmux.launch_claude_in_pane(
+            launched_session_id = self.tmux.launch_claude_in_pane(
                 agent.pane_index,
-                agent.name,  # Now passing agent name instead of session_id
+                agent.name,
                 agent.system_prompt,
                 agent.working_dir,
-                mcp_config=mcp_config
+                mcp_config=mcp_config,
+                session_id=agent.session_id
             )
-            
-            if session_id:
-                # Update agent with actual session ID
-                agent.session_id = session_id
-                agent.session_file = os.path.join(self.config.session_dir, f"{session_id}.jsonl")
-                self.logger.info(f"Agent {agent.name} launched with session ID: {session_id}")
-                
-                # Set agent name as a pane variable
-                # This will be displayed in the pane border along with whatever title Claude sets
-                self.tmux.set_pane_agent_name(agent.pane_index, agent.name)
-            else:
+
+            if not launched_session_id:
                 self.logger.error(f"Failed to launch agent {agent.name}")
                 self.stop()
                 return False
+
+            agent.resumed = launched_session_id == agent.session_id
+            if launched_session_id != agent.session_id:
+                agent.session_id = launched_session_id
+                self.logger.info(f"Agent {agent.name} launched with session ID: {launched_session_id}")
+            
+            agent.session_file = os.path.join(self.config.session_dir, f"{launched_session_id}.jsonl")
+            # Set agent name as a pane variable
+            # This will be displayed in the pane border along with whatever title Claude sets
+            self.tmux.set_pane_agent_name(agent.pane_index, agent.name)
             
         # All agents now have their session IDs from the two-stage launch
         self.logger.info("All agents launched with session IDs")
         
         # Send initial messages to create session files
-        self.logger.info("Creating session files...")
-        for agent in self.agents.values():
-            if agent.session_id and agent.session_id != "placeholder":
-                # Send initial message directly
-                if mcp_port:
-                    message = f"System initialized. You are {agent.name} agent with MCP tools available. Use 'list_agents' to see other agents."
-                else:
-                    message = f"System initialized. You are {agent.name} agent. Ready to receive commands."
-                    
-                if self.tmux.send_to_pane(agent.pane_index, message):
-                    self.logger.info(f"Sent initial message to {agent.name}")
-                else:
-                    self.logger.error(f"Failed to send initial message to {agent.name}")
-                time.sleep(1)
-        
-        # Wait for session files to be created
-        self.logger.info("Waiting for session files to be created...")
-        time.sleep(5)
-        
+        self.logger.info("Sending initial messages to create session files...")
+
         # If MCP is enabled, add welcome messages to help agents start
         if mcp_port:
             self.logger.info("Adding welcome messages for MCP agents...")
             with self._mailbox_lock:
-                for agent_name in self.agents:
+                for agent_name, agent in self.agents.items():
+                    if agent.resumed:
+                        continue
                     welcome_msg = {
                         "from": "System",
                         "to": agent_name,
@@ -243,11 +226,28 @@ class Orchestrator:
                         "timestamp": datetime.now().isoformat()
                     }
                     self.mailbox[agent_name].append(welcome_msg)
+        else:
+            for agent in self.agents.values():
+                if agent.resumed:
+                    continue
+
+                # Send initial message directly
+                message = f"System initialized. You are {agent.name} agent. Ready to receive commands."
+                    
+                if self.tmux.send_to_pane(agent.pane_index, message):
+                    self.logger.info(f"Sent initial message to {agent.name}")
+                else:
+                    self.logger.error(f"Failed to send initial message to {agent.name}")
+                time.sleep(1)
+
+        # Wait for session files to be created
+        self.logger.info("Waiting for session files to be created...")
+        time.sleep(5)
         
         # Set up monitors for agents with session files
         success_count = 0
         for agent in self.agents.values():
-            if agent.session_file and agent.session_id != "placeholder":
+            if agent.session_file:
                 # Check multiple times for session file
                 for attempt in range(3):
                     if os.path.exists(agent.session_file):

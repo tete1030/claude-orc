@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from src.orchestrator import Orchestrator, OrchestratorConfig
 from src.orchestrator_enhanced import EnhancedOrchestrator
-
+import shlex
 
 @dataclass
 class OrchestratorOptions:
@@ -53,39 +53,45 @@ class ConfigurableClaudeLauncher:
         self._debug = debug
         self._original_build = launcher_config_class.build_command_string
     
-    def build_command_string(self, agent_name: str, session_id: str, system_prompt: str, mcp_config_path: Optional[str] = None) -> str:
+    def build_command_string(self, instance_name: str, session_id: str, system_prompt: str, resume: bool, mcp_config_path: Optional[str] = None) -> str:
         """Build command with proper configuration"""
-        # Get the agent config
-        agent_config = self._agent_configs.get(agent_name, {})
-        
-        # Use instance name if available
-        instance_name = agent_config.get("instance_name", agent_name)
+        # Find the agent config
+        agent_config = None
+        agent_name = None
+        for name, config in self._agent_configs.items():
+            if config.get("name", name) == instance_name:
+                agent_config = config
+                agent_name = name
+                break
+
+        if not agent_config:
+            # No special config, just use default
+            return self._original_build(instance_name, session_id, system_prompt, resume, mcp_config_path)
         
         # Build base command
-        cmd = self._original_build(instance_name, session_id, system_prompt, mcp_config_path)
+        base_cmd = self._original_build(instance_name, session_id, system_prompt, resume, mcp_config_path)
         
-        # Build all parameters at once to maintain proper order
-        params = []
-        
-        # Add explicit context and role parameters first
-        agent_role = agent_config.get("role", "instance")
-        params.extend(["--context", self._context_name, "--role", agent_role])
-        
+        # Build ccdk parameters that need to go BEFORE "run"
+        ccdk_params = []
+
         # Add model if specified
         model = agent_config.get("model")
         if model:
-            params.extend(["--model", model])
-            
-        # Add debug flag if needed
-        if self._debug:
-            params.append("--debug")
+            ccdk_params.extend(["-m", shlex.quote(model)])
         
-        # Replace ccdk with ccdk plus all parameters
-        if params:
-            params_str = " ".join(params)
-            cmd = cmd.replace("ccdk", f"ccdk {params_str}", 1)
-            
-        return cmd
+        # Add context (ccdk accepts this)
+        ccdk_params.extend(["--context", shlex.quote(self._context_name)])
+        
+        # Add role (ccdk accepts this)
+        agent_role = agent_config.get("role", agent_name or "agent")
+        ccdk_params.extend(["--role", shlex.quote(agent_role)])
+
+        # Insert ccdk parameters before "run"
+        if ccdk_params:
+            params_str = " ".join(ccdk_params)
+            base_cmd = base_cmd.replace("ccdk run", f"ccdk {params_str} run", 1)
+        
+        return base_cmd
 
 
 class OrchestratorFactory:

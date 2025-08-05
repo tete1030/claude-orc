@@ -54,7 +54,8 @@ class TmuxManager:
         """
         try:
             # Check for existing session
-            if self.session_exists():
+            session_exists = self.session_exists()
+            if session_exists:
                 if not force:
                     self.logger.error(f"Tmux session '{self.session_name}' already exists!")
                     self.logger.info("Options:")
@@ -68,8 +69,57 @@ class TmuxManager:
                     self.kill_session()
                     time.sleep(0.5)
             
+            # In force mode, always try to kill any lingering session
+            # This is more aggressive and handles edge cases
+            if force:
+                self.logger.debug(f"Force mode: Ensuring clean state by killing session '{self.session_name}'")
+                try:
+                    # Kill session
+                    self._run_command(["tmux", "kill-session", "-t", self.session_name], check=False)
+                    # Also try to kill any windows that might be lingering
+                    self._run_command(["tmux", "kill-window", "-t", f"{self.session_name}:"], check=False)
+                    time.sleep(0.3)
+                except:
+                    pass
+                    
+                # Double-check it's really gone
+                if self.session_exists():
+                    self.logger.error(f"Session '{self.session_name}' still exists after force kill!")
+                    # Try one more time with server kill
+                    try:
+                        self._run_command(["tmux", "kill-server"], check=False)
+                        time.sleep(0.5)
+                    except:
+                        pass
+            
             # Create new session (detached) with a shell
-            self._run_command(["tmux", "new-session", "-d", "-s", self.session_name, "bash"])
+            # Set a larger default window size if creating many panes
+            if num_panes >= 5:
+                # For 5+ panes, we need a larger window
+                self._run_command(["tmux", "new-session", "-d", "-s", self.session_name, "-x", "120", "-y", "40", "bash"])
+                self.logger.info(f"Created session with larger window size (120x40) for {num_panes} panes")
+            else:
+                self._run_command(["tmux", "new-session", "-d", "-s", self.session_name, "bash"])
+            
+            # Small delay to ensure session is fully initialized
+            time.sleep(0.1)
+            
+            # Verify session was created
+            if not self.session_exists():
+                self.logger.error(f"Failed to create tmux session '{self.session_name}'")
+                return False
+                
+            # Check initial pane count
+            try:
+                result = self._run_command(
+                    ["tmux", "list-panes", "-t", self.session_name, "-F", "#{pane_index}"],
+                    capture_output=True, text=True
+                )
+                initial_panes = len(result.stdout.strip().split('\n')) if result.stdout.strip() else 0
+                if initial_panes != 1:
+                    self.logger.warning(f"Session created with {initial_panes} panes instead of 1!")
+            except:
+                pass
             
             # Configure tmux to show pane titles with agent names
             self._run_command(["tmux", "set-option", "-t", self.session_name, "pane-border-status", "top"])
@@ -133,14 +183,67 @@ class TmuxManager:
             
             # Apply layout if more than one pane
             if num_panes > 1:
+                # Check current pane count before applying layout
+                try:
+                    result = self._run_command(
+                        ["tmux", "list-panes", "-t", self.session_name, "-F", "#{pane_index}"],
+                        capture_output=True, text=True
+                    )
+                    current_panes = len(result.stdout.strip().split('\n')) if result.stdout.strip() else 0
+                    self.logger.info(f"Before layout: session has {current_panes} panes, expecting to create {num_panes}")
+                except:
+                    pass
+                    
                 layout_commands = self.layout_manager.generate_layout_commands(
                     layout_config, self.session_name
                 )
                 
-                for cmd in layout_commands:
+                self.logger.info(f"Layout commands to execute: {len(layout_commands)}")
+                for i, cmd in enumerate(layout_commands):
                     # Execute layout commands in the session context
                     cmd_parts = ["tmux"] + cmd.split()
-                    self._run_command(cmd_parts)
+                    try:
+                        self.logger.debug(f"Executing layout command: {' '.join(cmd_parts)}")
+                        # Capture output for better error reporting
+                        result = self._run_command(cmd_parts, capture_output=True, text=True)
+                    except subprocess.CalledProcessError as e:
+                        self.logger.error(f"Failed to execute layout command: {' '.join(cmd_parts)}")
+                        self.logger.error(f"Error: {e}")
+                        if hasattr(e, 'stderr') and e.stderr:
+                            self.logger.error(f"stderr: {e.stderr}")
+                            # Check for specific errors
+                            if "no space for new pane" in e.stderr:
+                                self.logger.error("Terminal too small or too many panes for available space!")
+                                # Get terminal dimensions
+                                try:
+                                    dims = self._run_command(
+                                        ["tmux", "display-message", "-p", "#{window_width}x#{window_height}"],
+                                        capture_output=True, text=True, check=False
+                                    )
+                                    self.logger.error(f"Terminal dimensions: {dims.stdout.strip()}")
+                                except:
+                                    pass
+                        if hasattr(e, 'stdout') and e.stdout:
+                            self.logger.error(f"stdout: {e.stdout}")
+                        # Check if session still exists
+                        if not self.session_exists():
+                            self.logger.error(f"Session '{self.session_name}' no longer exists!")
+                        else:
+                            # List current state for debugging
+                            try:
+                                windows = self._run_command(
+                                    ["tmux", "list-windows", "-t", self.session_name],
+                                    capture_output=True, text=True, check=False
+                                )
+                                self.logger.error(f"Current windows: {windows.stdout}")
+                                panes = self._run_command(
+                                    ["tmux", "list-panes", "-t", self.session_name],
+                                    capture_output=True, text=True, check=False
+                                )
+                                self.logger.error(f"Current panes: {panes.stdout}")
+                            except:
+                                pass
+                        raise
             
             layout_info = f" using {layout_config.type.value} layout"
             if layout_config.type.value == "grid" and layout_config.grid_rows:
@@ -482,8 +585,17 @@ class TmuxManager:
             
     def launch_claude_in_pane(self, pane_index: int, agent_name: str,
                             agent_prompt: str, working_dir: Optional[str] = None,
-                            mcp_config: Optional[Dict[str, Any]] = None) -> Optional[str]:
+                            mcp_config: Optional[Dict[str, Any]] = None,
+                            session_id: Optional[str] = None) -> Optional[str]:
         """Launch Claude in specific pane with given configuration
+        
+        Args:
+            pane_index: Tmux pane index
+            agent_name: Name of the agent
+            agent_prompt: System prompt for the agent
+            working_dir: Optional working directory
+            mcp_config: Optional MCP configuration
+            session_id: Session ID to resume
         
         Returns:
             Session ID if successful, None otherwise
@@ -495,19 +607,22 @@ class TmuxManager:
                 time.sleep(0.5)
             
             # Use simple launcher to get session ID
-            session_id = self.simple_launcher.launch_agent(
+            launched_session_id = self.simple_launcher.launch_agent(
                 pane_index=pane_index, 
                 agent_name=agent_name, 
                 system_prompt=agent_prompt, 
-                mcp_config=mcp_config
+                mcp_config=mcp_config,
+                session_id=session_id
             )
             
-            if session_id:
-                self.logger.info(f"Successfully launched Claude in pane {pane_index} with session {session_id}")
+            if launched_session_id:
+                if session_id is not None and launched_session_id != session_id:
+                    self.logger.error(f"Agent {agent_name} launched with different session ID: {launched_session_id} (expected {session_id})")
+                self.logger.info(f"Successfully launched Claude in pane {pane_index} with session {launched_session_id}")
             else:
                 self.logger.error(f"Failed to launch Claude in pane {pane_index}")
                 
-            return session_id
+            return launched_session_id
             
         except Exception as e:
             self.logger.error(f"Failed to launch Claude in pane {pane_index}: {e}")
@@ -528,4 +643,9 @@ class TmuxManager:
     def _run_command(self, cmd: List[str], check: bool = True, 
                     capture_output: bool = False, text: bool = False) -> subprocess.CompletedProcess:
         """Run command with error handling"""
-        return subprocess.run(cmd, check=check, capture_output=capture_output, text=text)
+        self.logger.debug(f"Executing command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, check=check, capture_output=capture_output, text=text)
+        if result.returncode != 0 and capture_output:
+            self.logger.debug(f"Command failed with stdout: {result.stdout}")
+            self.logger.debug(f"Command failed with stderr: {result.stderr}")
+        return result

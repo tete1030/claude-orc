@@ -263,6 +263,7 @@ class SessionCLIManager:
         debug: bool = False,
         task: str = None,
         auto_cleanup: bool = True,
+        fresh: bool = False,
     ) -> bool:
         """Launch a team configuration"""
         # Handle forced context cleanup here if needed
@@ -280,6 +281,7 @@ class SessionCLIManager:
             debug=debug,
             task=task,
             auto_cleanup=auto_cleanup,
+            fresh=fresh,
         )
 
 
@@ -316,13 +318,8 @@ def main():
     parser = argparse.ArgumentParser(description="Manage Claude orchestrator sessions")
     
     # Import command registry
-    try:
-        from src.cli.command_registry import CommandRegistry
-        registry = CommandRegistry()
-    except ImportError:
-        print("Warning: Command registry not available, using legacy command handling")
-        # Fall back to old implementation
-        return main_legacy(parser)
+    from src.cli.command_registry import CommandRegistry
+    registry = CommandRegistry()
     
     # Set up parser with commands
     registry.setup_parser(parser)
@@ -341,145 +338,6 @@ def main():
     sys.exit(exit_code)
 
 
-def main_legacy(parser):
-    """Legacy main function for backward compatibility"""
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # List sessions
-    list_parser = subparsers.add_parser("list", help="List all team contexts")
-    list_parser.add_argument(
-        "--detailed", "-d", action="store_true", help="Show detailed information"
-    )
-
-    # Show session info
-    info_parser = subparsers.add_parser("info", help="Show detailed context information")
-    info_parser.add_argument("context_name", help="Name of the context")
-
-    # Health check
-    health_parser = subparsers.add_parser("health", help="Check context health")
-    health_parser.add_argument("context_name", help="Name of the context")
-    health_parser.add_argument("--json", action="store_true", help="Output as JSON")
-
-    # Cleanup
-    clean_parser = subparsers.add_parser("clean", help="Clean up a context")
-    clean_parser.add_argument("context_name", help="Name of the context")
-    clean_parser.add_argument("--force", "-f", action="store_true", help="Skip confirmation prompt")
-
-    # Export
-    export_parser = subparsers.add_parser("export", help="Export context configuration")
-    export_parser.add_argument("context_name", help="Name of the context")
-    export_parser.add_argument("output_file", help="Output file path")
-
-    # Import
-    import_parser = subparsers.add_parser("import", help="Import context configuration")
-    import_parser.add_argument("config_file", help="Configuration file path")
-
-    # Teams subcommand
-    teams_parser = subparsers.add_parser("teams", help="Team configuration management")
-    teams_subparsers = teams_parser.add_subparsers(dest="teams_command", help="Teams commands")
-
-    # Teams list
-    teams_subparsers.add_parser(
-        "list", help="List available team configurations"
-    )
-
-    # Launch team
-    launch_parser = subparsers.add_parser("launch", help="Launch a team configuration")
-    launch_parser.add_argument("--team", required=True, help="Team configuration name")
-    launch_parser.add_argument("--name", help="Override context name")
-    launch_parser.add_argument("--model", help="Override all agents' models")
-    launch_parser.add_argument(
-        "--agent-model",
-        action="append",
-        default=[],
-        help="Override specific agent model (format: Agent=model)",
-    )
-    launch_parser.add_argument(
-        "--force", "-f", action="store_true", help="Force kill existing session if it exists"
-    )
-    launch_parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    launch_parser.add_argument("--task", help="Initial task for the team (will be added to Architect prompt)")
-    launch_parser.add_argument("--no-auto-cleanup", action="store_true", help="Disable automatic context cleanup on exit")
-
-    args = parser.parse_args()
-
-    if not args.command:
-        parser.print_help()
-        return
-
-    manager = SessionCLIManager()
-
-    if args.command == "list":
-        contexts = manager.list_contexts()
-        if args.detailed:
-            for context in contexts.values():
-                print_context_details(context)
-                print()
-        else:
-            print_sessions_table(contexts)
-
-    elif args.command == "info":
-        context = manager.get_context_details(args.context_name)
-        if context:
-            print_context_details(context)
-        else:
-            print(f"Context '{args.context_name}' not found")
-
-    elif args.command == "health":
-        health = manager.health_check_context(args.context_name)
-        if args.json:
-            print(json.dumps(health, indent=2))
-        else:
-            if "error" in health:
-                print(health["error"])
-            else:
-                print(f"Context: {health['context_name']}")
-                print(f"Overall health: {health['overall_health']}")
-
-                if health["issues"]:
-                    print("\nIssues:")
-                    for issue in health["issues"]:
-                        print(f"  - {issue}")
-
-                print(f"\nContainers: {len(health['containers'])}")
-                for name, container_health in health["containers"].items():
-                    status_icon = "🟢" if container_health["status"] == "healthy" else "🔴"
-                    print(f"  {status_icon} {name}: {container_health['status']}")
-
-    elif args.command == "clean":
-        manager.cleanup_context(args.context_name, args.force)
-
-    elif args.command == "export":
-        manager.export_session_config(args.context_name, args.output_file)
-
-    elif args.command == "import":
-        manager.import_session_config(args.config_file)
-
-    elif args.command == "teams":
-        if args.teams_command == "list":
-            teams = manager.list_teams()
-            print_teams_table(teams)
-        else:
-            teams_parser.print_help()
-
-    elif args.command == "launch":
-        # Parse agent model overrides
-        agent_model_overrides = parse_agent_model_overrides(args.agent_model)
-
-        # Launch the team
-        success = manager.launch_team(
-            team_name=args.team,
-            context_name=args.name,
-            model_override=args.model,
-            agent_model_overrides=agent_model_overrides,
-            force=args.force,
-            debug=args.debug,
-            task=args.task,
-            auto_cleanup=not args.no_auto_cleanup,
-        )
-
-        if not success:
-            sys.exit(1)
 
 
 if __name__ == "__main__":

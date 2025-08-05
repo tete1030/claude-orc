@@ -297,6 +297,43 @@ ccorc launch --team devops-team --force
 ccorc launch --team devops-team --session my-custom-session
 ```
 
+## Session Persistence (Technical Details)
+
+### Architecture Overview
+The orchestrator supports automatic session persistence using Claude's built-in `--resume` functionality:
+
+1. **Session ID Storage**: Each agent's session ID is stored in `TeamContextAgentInfo.session_id`
+2. **Auto-Resume Logic**: `TeamLaunchService._launch_agent()` checks for existing session files before launching
+3. **Session File Location**: `~/.claude/projects/<escaped-cwd>/<session-id>.jsonl`
+4. **Fresh Sessions**: `--fresh` flag bypasses session checking and forces new UUIDs
+
+### Implementation Details
+
+#### Auto-Resume Decision Flow
+1. Check if agent has existing `session_id` in context
+2. Validate session file exists on disk
+3. If both true and not `--fresh`: Use `--resume <session_id>`
+4. Otherwise: Generate new session ID and start fresh
+
+#### Key Components Modified
+- `TeamContextAgentInfo`: Added `session_id` field
+- `TeamLaunchService`: Added session validation and resume logic
+
+### Testing Session Persistence
+```bash
+# Launch team and create sessions
+ccorc launch --team devops-team
+
+# Verify session IDs are stored
+ccorc info devops-team  # Shows session IDs
+
+# Stop and restart - should auto-resume
+ccorc launch --team devops-team
+
+# Force fresh sessions
+ccorc launch --team devops-team --fresh
+```
+
 ## Background Process Management
 
 ### CRITICAL: Use claude-bg for Background Processes
@@ -325,6 +362,22 @@ claude-bg logs team-demo_[timestamp]
 # Stop process
 claude-bg stop team-demo_[timestamp]
 ```
+
+## Development Patterns and Best Practices
+
+### Backward Compatibility Policy
+
+**IMPORTANT**: For this project, backward compatibility is generally NOT required. This allows for:
+- Cleaner code without legacy support
+- Faster development cycles
+- Simpler data models
+- Focus on current functionality over migration paths
+
+When making changes:
+- Feel free to modify data structures without migration code
+- Don't add complexity to support old formats
+- Focus on the best solution for current needs
+- Document breaking changes clearly
 
 ## Development Patterns and Best Practices
 

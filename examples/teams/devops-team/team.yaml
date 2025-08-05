@@ -5,9 +5,11 @@ team:
 agents:
   - name: "Architect"
     role: "Team Lead and System Architect"
+    model: "opus"
     
   - name: "Developer"
     role: "Implementation and Coding Engineer"
+    model: "opus"
     
   - name: "QA"
     role: "Quality Assurance Engineer"
@@ -19,25 +21,9 @@ agents:
     role: "Documentation Specialist"
 
 settings:
+  default_model: "sonnet"
   default_context_name: "devops-team"
   orchestrator_type: "enhanced"
   poll_interval: 0.5
   mcp_port: 8766
   debug: false
-  container_mode: "isolated"
-
-workflow:
-  coordination_rules:
-    - "Plan before code - Architect leads design discussions"
-    - "Sequential validation - Development → QA → DevOps → Documentation"
-    - "Clear handoffs between team members"
-    - "No bypassing QA - all features must be tested"
-    - "DevOps validates deployment concerns"
-    - "Documentation reflects final tested features"
-  
-  communication_patterns:
-    - "Architect broadcasts major decisions"
-    - "Developer reports completion to QA"
-    - "QA reports test results to team"
-    - "DevOps provides infrastructure feedback"
-    - "Docs requests clarification when needed"

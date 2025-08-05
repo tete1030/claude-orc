@@ -135,6 +135,77 @@ python scripts/diagnose_agent_states.py <session-name> --single
 # Saves to .temp/state_snapshot_TIMESTAMP.txt
 ```
 
+## Session Persistence and Resuming
+
+Claude Multi-Agent Orchestrator supports automatic session persistence, allowing teams to resume conversations exactly where they left off. This feature uses Claude's built-in `--resume` functionality to maintain conversation history across restarts.
+
+### How Session Persistence Works
+
+1. **Automatic Session Assignment**: When launching a team, each agent is assigned a unique session ID
+2. **Session File Storage**: Claude stores conversation history in `~/.claude/projects/<escaped-cwd>/<session-id>.jsonl`
+3. **Auto-Resume on Restart**: When relaunching a team, existing sessions are automatically resumed
+4. **Forced Fresh Sessions**: Use `--fresh` flag to start new conversations
+
+### Session Management Workflow
+
+```bash
+# Launch a team - sessions are automatically created
+ccorc launch --team devops-team
+
+# Stop the team (conversations are preserved)
+# Either exit the tmux session or use Ctrl+C
+
+# Resume the team - conversations continue where they left off
+ccorc launch --team devops-team
+
+# Force fresh sessions (ignore existing conversations)
+ccorc launch --team devops-team --fresh
+
+# Launch with custom session name for easier tracking
+ccorc launch --team devops-team --session my-feature-dev
+```
+
+### Checking Session Status
+
+```bash
+# View team details including session IDs
+ccorc info my-feature-dev
+
+# Example output shows session IDs for each agent:
+# Agent: Architect
+#   Role: Team Lead and System Architect
+#   Model: sonnet
+#   Session ID: abc123-def456-789012  # <-- This is the Claude session ID
+```
+
+### Session File Locations
+
+Session files are stored based on the working directory:
+- Pattern: `~/.claude/projects/<escaped-working-dir>/<session-id>.jsonl`
+- Example: `~/.claude/projects/-home-user-project/abc123-def456-789012.jsonl`
+
+### Best Practices
+
+1. **Use Descriptive Context Names**: Makes it easier to track which sessions belong to which project
+   ```bash
+   ccorc launch --team devops-team --session feature-xyz-development
+   ```
+
+2. **Clean Up Old Sessions**: Remove contexts you no longer need
+   ```bash
+   ccorc clean feature-xyz-development --force
+   ```
+
+3. **Fresh Start When Needed**: Use `--fresh` for unrelated tasks
+   ```bash
+   ccorc launch --team security-team --fresh
+   ```
+
+4. **Check Before Resuming**: Use `ccorc info` to see if sessions exist
+   ```bash
+   ccorc info my-project
+   ```
+
 ## Team Context Management
 
 Teams automatically create persistent contexts that survive restarts:
@@ -400,6 +471,69 @@ python scripts/diagnose_agent_states.py <session-name> --duration 120
 ### Docker Isolation
 - **Issue**: Agents need shared directory for MCP communication
 - **Solution**: Mount `/tmp/claude-orc` in all containers
+
+## Testing Session Persistence
+
+The orchestrator includes comprehensive testing for session persistence functionality. Understanding these tests helps verify that session resumption works correctly in your environment.
+
+### Running Session Persistence Tests
+
+```bash
+# Run all session persistence unit tests
+pytest tests/unit/test_session_persistence*.py -v
+
+# Run integration tests
+pytest tests/integration/test_session_persistence_e2e.py -v
+
+# Run with coverage report
+pytest tests/unit/test_session_persistence*.py --cov=src --cov-report=html
+```
+
+### Test Categories
+
+#### Data Model Tests
+Verify that session IDs are properly stored and retrieved:
+```bash
+pytest tests/unit/test_session_persistence_data_model.py -v
+```
+
+#### Resume Logic Tests
+Test auto-resume decision flow:
+```bash
+pytest tests/unit/test_team_launch_resume_logic.py -v
+```
+
+#### Session File Validation
+Verify session file detection:
+```bash
+pytest tests/unit/test_session_file_validation.py -v
+```
+
+### Debugging Session Issues
+
+If sessions aren't resuming as expected:
+
+1. **Verify Session Files Exist**
+   ```bash
+   ls ~/.claude/projects/*/
+   ```
+
+2. **Check Context Registry**
+   ```bash
+   ccorc info <context-name>
+   # Look for session_id fields
+   ```
+
+3. **Run Diagnostic Tests**
+   ```bash
+   # Test session file detection
+   python -c "from pathlib import Path; print(Path.home() / '.claude' / 'projects')"
+   ```
+
+4. **Enable Debug Logging**
+   ```bash
+   ccorc launch --team devops-team --debug
+   ```
 
 ## See Also
 

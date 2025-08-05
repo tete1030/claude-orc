@@ -68,12 +68,6 @@ class TeamConfigFixtures:
                 "orchestrator_type": "enhanced",
                 "poll_interval": 0.5,
                 "mcp_port": 8766
-            },
-            "workflow": {
-                "coordination_rules": [
-                    "Plan before code - Architect leads design discussions",
-                    "Sequential validation - Development → QA → DevOps → Documentation"
-                ]
             }
         }
     

@@ -26,35 +26,3 @@ settings:
   poll_interval: 0.8
   mcp_port: 8768
   debug: false
-  container_mode: "shared"
-
-workflow:
-  coordination_rules:
-    - "Data-driven decisions - all recommendations must be backed by data"
-    - "Data architecture first - Data Architect designs data models and pipelines"
-    - "Quality data pipelines - Data Engineer implements robust data infrastructure"
-    - "Model validation - ML Engineer validates all machine learning implementations"
-    - "Business alignment - Analyst ensures outputs meet business requirements"
-    - "Iterative development - continuous improvement of data products"
-  
-  communication_patterns:
-    - "Data Architect broadcasts data strategy and architecture decisions"
-    - "Data Engineer reports pipeline status and infrastructure updates"
-    - "ML Engineer shares model performance and training results"
-    - "Analyst provides business insights and requirements feedback"
-    - "All team members collaborate on data quality and governance"
-
-data_focus:
-  primary_concerns:
-    - "Data quality and governance"
-    - "Scalable data pipelines"
-    - "Machine learning model lifecycle"
-    - "Business intelligence and analytics"
-    - "Data security and privacy"
-  
-  technologies:
-    - "Apache Spark and Kafka"
-    - "Python data stack (pandas, scikit-learn, PyTorch)"
-    - "SQL databases and data warehouses"
-    - "Cloud data platforms (AWS, GCP, Azure)"
-    - "MLOps and model deployment tools"

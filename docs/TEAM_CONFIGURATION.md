@@ -39,17 +39,6 @@ settings:
   poll_interval: 0.5
   mcp_port: 8766
   debug: false
-  container_mode: "isolated"  # "isolated" or "shared"
-
-# Optional workflow documentation
-workflow:
-  coordination_rules:
-    - "Rule 1: Description of coordination pattern"
-    - "Rule 2: Another coordination pattern"
-  
-  communication_patterns:
-    - "Pattern 1: How team members communicate"
-    - "Pattern 2: Information flow patterns"
 ```
 
 ### JSON Format Example
@@ -210,7 +199,6 @@ teams/
 | `poll_interval` | State monitoring frequency (seconds) | 0.5 | Number |
 | `mcp_port` | MCP server port | 8766 | Port number |
 | `debug` | Enable debug mode | false | true, false |
-| `container_mode` | Container isolation level | "isolated" | "isolated", "shared" |
 
 #### Agent Configuration
 
@@ -220,21 +208,6 @@ teams/
 | `role` | Agent role description | Yes | "System Design Lead" |
 | `model` | Agent-specific model | No | "sonnet" |
 | `prompt_file` | Custom prompt file name | No | "custom_prompt.md" |
-
-#### Workflow Documentation (Optional)
-
-The `workflow` section documents team patterns but doesn't affect functionality:
-
-```yaml
-workflow:
-  coordination_rules:
-    - "Architect leads design discussions"
-    - "Sequential validation through QA"
-  
-  communication_patterns:
-    - "Architect broadcasts decisions"
-    - "QA reports test results"
-```
 
 ### Validation
 
