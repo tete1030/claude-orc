@@ -65,6 +65,9 @@ ccdk restart
 
 # Remove the container
 ccdk rm
+
+# List all containers
+ccdk ps
 ```
 
 ### Working with Running Containers
@@ -78,11 +81,11 @@ ccdk cc                  # Start Claude
 ccdk cc --help          # Pass arguments to Claude
 
 # Open bash shell in container
-ccdk shell
+ccdk sh
 
 # Execute other commands in container
-ccdk shell ls -la        # Run commands via shell
-ccdk shell python app.py # Run Python scripts
+ccdk sh ls -la        # Run commands via shell
+ccdk sh python app.py # Run Python scripts
 ```
 
 ## Advanced Usage
@@ -93,19 +96,19 @@ Use convenient options instead of environment variables:
 
 ```bash
 # Set instance name
-ccdk run -i dev
-ccdk start -i frontend
+ccdk run dev
+ccdk start frontend
 
 # Set model
-ccdk run -m sonnet
-ccdk run -m opus  # Pass model name directly
+ccdk -m sonnet run
+ccdk -m opus run  # Pass model name directly
 
 # Set container mode
 ccdk run --isolated   # Isolated container mode
 ccdk run --shared     # Shared container mode
 
 # Combine options
-ccdk run -i dev -m sonnet --isolated
+ccdk -m sonnet run dev --isolated
 ```
 
 ### Multiple Instances
@@ -114,14 +117,14 @@ You can run multiple Claude Code containers:
 
 ```bash
 # Using options
-ccdk start -i dev
-ccdk start -i test
-ccdk start -i prod
+ccdk start dev
+ccdk start test
+ccdk start prod
 
 # Work with specific instance
-ccdk cc -i dev
-ccdk logs -i test
-ccdk stop -i prod
+ccdk cc dev
+ccdk logs test
+ccdk stop prod
 
 # Using environment variables (legacy)
 CLAUDE_INSTANCE=dev ccdk start
@@ -354,23 +357,24 @@ docker ps  # Should work without sudo
 | `ccdk start` | Start persistent container |
 | `ccdk stop` | Stop running container |
 | `ccdk restart` | Restart container |
-| `ccdk clean` | Remove container and volumes |
 | `ccdk status` | Show container status |
 | `ccdk logs` | View container logs |
 | `ccdk cc [args]` | Run Claude Code in container |
-| `ccdk shell [cmd]` | Open shell or execute command |
-| `ccdk list` | List all Claude Code containers |
+| `ccdk sh [cmd]` | Open shell or execute command (alias: shell) |
+| `ccdk ps` | List all Claude Code containers (alias: list) |
+| `ccdk rm` | Remove container and volumes (alias: clean) |
 | `ccdk --help` | Show help message |
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `-i, --instance <name>` | Set instance name |
-| `-m, --model <model>` | Set Claude model |
+| `-m, --model <model>` | Set Claude model (use before command) |
 | `--isolated` | Use isolated container mode |
 | `--shared` | Use shared container mode |
 | `--random` | Add random suffix to container |
+
+Note: Instance name is now positional (e.g., `ccdk run dev` instead of `ccdk run -i dev`)
 
 ## See Also
 

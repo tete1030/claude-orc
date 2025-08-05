@@ -12,37 +12,73 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 IMAGE_NAME="ccbox:latest"
 DEFAULT_CONTAINER_NAME="ccbox"
 
-# Parse command line options
+# Initialize variables
 INSTANCE_NAME="${CLAUDE_INSTANCE:-}"
 RANDOM_INSTANCE_SUFFIX=""
 MODEL_NAME="${ANTHROPIC_MODEL:-}"
 CONTAINER_MODE="${CLAUDE_CONTAINER_MODE:-}"
+COMMAND=""
 PARSED_ARGS=()
-# Explicit context and role parameters (no parsing)
+# Explicit context and role parameters
 CONTEXT_NAME="default"
 ROLE="instance"
 
-# Function to parse options
-parse_options() {
+# Function to parse new CLI structure
+parse_command_and_options() {
+    # First, extract any global options that come before the command
+    while [[ $# -gt 0 ]] && [[ "$1" =~ ^- ]]; do
+        case "$1" in
+            -q|--quiet)
+                QUIET_MODE=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE_MODE=true
+                shift
+                ;;
+            --help|-h)
+                print_usage
+                exit 0
+                ;;
+            *)
+                echo "Unknown global option: $1" >&2
+                print_usage
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Now get the command
+    if [[ $# -gt 0 ]]; then
+        COMMAND="$1"
+        shift
+    else
+        print_usage
+        exit 1
+    fi
+    
+    # For commands that accept an instance name, check if next arg is not a flag
+    case "$COMMAND" in
+        run|start|stop|restart|sh|shell|logs|status|rm|clean|cc)
+            if [[ $# -gt 0 ]] && [[ ! "$1" =~ ^- ]]; then
+                INSTANCE_NAME="$1"
+                shift
+            fi
+            ;;
+    esac
+    
+    # Parse remaining command-specific options
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -i|--instance)
-                INSTANCE_NAME="$2"
-                shift 2
-                ;;
-            -m|--model)
-                MODEL_NAME="$2"
-                shift 2
-                ;;
-            --isolated)
+            -i|--isolated)
                 CONTAINER_MODE="isolated"
                 shift
                 ;;
-            --shared)
+            -s|--shared)
                 CONTAINER_MODE="shared"
                 shift
                 ;;
-            --random)
+            -r|--random)
                 local random_instance_suffix=""
                 # Generate 8-character random string (alphanumeric)
                 random_instance_suffix=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 8 || true)
@@ -61,6 +97,10 @@ parse_options() {
                 ROLE="$2"
                 shift 2
                 ;;
+            -m|--model)
+                MODEL_NAME="$2"
+                shift 2
+                ;;
             *)
                 PARSED_ARGS+=("$1")
                 shift
@@ -69,8 +109,7 @@ parse_options() {
     done
 }
 
-# Parse all arguments
-parse_options "$@"
+# Arguments will be parsed after function definitions
 
 # Export parsed values
 { [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ] ; } && export CLAUDE_INSTANCE="${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
@@ -94,42 +133,39 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 print_usage() {
-    echo "Usage: $0 [OPTIONS] {build|start|stop|restart|run|run-shell|cc|shell|logs|status|list|clean}" >&2
+    echo "Usage: ccdk [global-options] <command> [instance] [command-options]" >&2
     echo "" >&2
     echo "Commands:" >&2
-    echo "  build      - Build the Docker image (only needed once)" >&2
-    echo "  start      - Start a persistent container" >&2
-    echo "  stop       - Stop the container" >&2
-    echo "  restart    - Restart the container" >&2
-    echo "  run        - Run Claude Code in a new temporary container (auto-removes on exit)" >&2
-    echo "  run-shell  - Run interactive shell in a new temporary container (auto-removes on exit)" >&2
-    echo "  cc         - Run Claude Code in existing container (or pass other commands)" >&2
-    echo "  shell      - Open an interactive bash shell in the container" >&2
-    echo "  logs       - Show container logs" >&2
-    echo "  status     - Show container status" >&2
-    echo "  list       - List all Claude Code containers" >&2
-    echo "  clean      - Remove container and volumes (WARNING: deletes data)" >&2
-    echo "              Usage: clean [filter] - With filter, removes all matching containers" >&2
+    echo "  run [instance]       Run Claude Code (temporary container)" >&2
+    echo "  start [instance]     Start a persistent container" >&2
+    echo "  stop [instance]      Stop the container" >&2
+    echo "  restart [instance]   Restart the container" >&2
+    echo "  sh|shell [instance]  Open bash shell in container" >&2
+    echo "  rm|clean [instance]  Remove container and volumes" >&2
+    echo "  ps|list              List all Claude Code containers" >&2
+    echo "  logs [instance]      Show container logs" >&2
+    echo "  status [instance]    Show container status" >&2
+    echo "  build                Build the Docker image" >&2
+    echo "  cc [instance]        Run command in existing container" >&2
     echo "" >&2
-    echo "Options:" >&2
-    echo "  -i, --instance <name>  - Set instance name (e.g., dev, test, prod)" >&2
-    echo "  -m, --model <model>    - Set model (e.g., sonnet, opus)" >&2
-    echo "  --isolated             - Use isolated container mode" >&2
-    echo "  --shared               - Use shared container mode" >&2
-    echo "  --random               - Add random suffix to container name" >&2
+    echo "Global Options (before command):" >&2
+    echo "  -m, --model <model>  Set model (e.g., sonnet, opus)" >&2
+    echo "  -q, --quiet          Quiet mode" >&2
+    echo "  -v, --verbose        Verbose mode" >&2
+    echo "" >&2
+    echo "Command Options:" >&2
+    echo "  -i, --isolated       Use isolated container mode" >&2
+    echo "  -s, --shared         Use shared container mode" >&2
+    echo "  -r, --random         Add random suffix to container name" >&2
     echo "" >&2
     echo "Examples:" >&2
-    echo "  # Run Claude with specific model in dev instance" >&2
-    echo "  $0 run -i dev -m sonnet" >&2
-    echo "  # Start isolated container for testing" >&2
-    echo "  $0 start -i test --isolated" >&2
-    echo "  # Open shell in specific instance" >&2
-    echo "  $0 shell -i frontend" >&2
-    echo "  # Run Claude in existing container with extra args" >&2
-    echo "  $0 cc -i backend --help" >&2
-    echo "  # Multiple instances" >&2
-    echo "  $0 start -i frontend -m sonnet" >&2
-    echo "  $0 start -i backend -m opus" >&2
+    echo "  ccdk run                     # Run with default instance" >&2
+    echo "  ccdk run dev                 # Run in dev instance" >&2
+    echo "  ccdk -m opus run prod        # Run with opus model" >&2
+    echo "  ccdk start test --isolated   # Start isolated test container" >&2
+    echo "  ccdk sh backend              # Shell into backend instance" >&2
+    echo "  ccdk rm                      # Remove default instance" >&2
+    echo "  ccdk ps                      # List all containers" >&2
 }
 
 print_status() {
@@ -409,7 +445,7 @@ restart_container() {
 # Open shell in container
 exec_shell() {
     # Remove 'shell' from arguments
-    local args=("${PARSED_ARGS[@]:1}")
+    local args=("${PARSED_ARGS[@]}")
     
     # Check if container is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
@@ -456,7 +492,7 @@ exec_shell() {
 # Run temporary container
 run_temporary() {
     # Remove 'run' from arguments
-    local args=("${PARSED_ARGS[@]:1}")
+    local args=("${PARSED_ARGS[@]}")
 
     # Check if image exists
     if ! image_exists; then
@@ -544,8 +580,7 @@ run_shell() {
 
 # Execute command in container
 claude_code() {
-    # Remove the first element from PARSED_ARGS (which is 'cc')
-    local args=("${PARSED_ARGS[@]:1}")
+    local args=("${PARSED_ARGS[@]}")
     
     # Check if container is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
@@ -624,10 +659,9 @@ list_containers() {
 
 # Clean up
 clean_up() {
-    # Get filter from PARSED_ARGS instead of $2
     local filter=""
-    if [ ${#PARSED_ARGS[@]} -gt 1 ]; then
-        filter="${PARSED_ARGS[1]}"
+    if [ ${#PARSED_ARGS[@]} -gt 0 ]; then
+        filter="${PARSED_ARGS[0]}"
     fi
     
     # Check if a filter was provided
@@ -681,8 +715,14 @@ clean_up() {
 # Main script logic
 check_dependencies
 
-# Get the command from PARSED_ARGS
-COMMAND="${PARSED_ARGS[0]}"
+# Parse command line arguments
+parse_command_and_options "$@"
+
+# Check if command was provided
+if [[ -z "$COMMAND" ]]; then
+    print_usage
+    exit 1
+fi
 
 case "$COMMAND" in
     build)
@@ -697,14 +737,11 @@ case "$COMMAND" in
     restart)
         restart_container
         ;;
-    shell)
+    sh|shell)
         exec_shell
         ;;
     run)
         run_temporary "${PARSED_ARGS[@]}"
-        ;;
-    run-shell)
-        run_shell
         ;;
     cc)
         claude_code
@@ -715,10 +752,10 @@ case "$COMMAND" in
     status)
         show_status
         ;;
-    list)
+    ps|list)
         list_containers
         ;;
-    clean)
+    rm|clean)
         clean_up
         ;;
     *)

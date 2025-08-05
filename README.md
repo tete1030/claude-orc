@@ -67,15 +67,20 @@ Get started with team-based configuration in seconds:
 ccorc teams list
 
 # Launch the DevOps team (auto-resumes existing sessions)
-ccorc launch --team devops-team
+ccorc launch devops-team
 
-# Launch with custom session name
-ccorc launch --team devops-team --session my-project
+# Launch with custom context name
+ccorc launch devops-team my-project
 
 # Stop and resume workflow
-ccorc stop my-project                     # Stop the team
-ccorc launch --team devops-team           # Auto-resumes conversations
-ccorc launch --team devops-team --fresh   # Force new sessions
+ccorc stop my-project              # Stop the team
+ccorc launch devops-team           # Auto-resumes conversations
+ccorc launch devops-team -F        # Force new sessions
+
+# Launch with options
+ccorc launch devops-team -t "Build auth system"     # With initial task
+ccorc launch devops-team -d                         # Debug mode
+ccorc launch devops-team -n                         # No auto-cleanup
 ```
 
 This launches a complete team (Architect, Developer, QA, DevOps, Docs) with intelligent message delivery, agent state detection, and automatic notifications.
@@ -105,7 +110,7 @@ settings:
 
 Launch your custom team:
 ```bash
-ccorc launch --team my-team
+ccorc launch my-team
 ```
 
 ### Persistent Team Contexts
@@ -114,13 +119,15 @@ Teams automatically create persistent contexts that survive restarts:
 
 ```bash
 # List active team contexts
-ccorc list
+ccorc ls                      # Short form
+ccorc list                   # Long form
 
 # Get detailed team status
 ccorc info my-project
 
 # Clean up when done
-ccorc clean my-project
+ccorc rm my-project          # Short form
+ccorc clean my-project       # Long form
 ```
 
 See the [Team Configuration Guide](docs/TEAM_CONFIGURATION.md) for complete details on creating custom teams.
@@ -306,10 +313,20 @@ The orchestrator includes CCBox (Claude Code Box) - a Docker environment for run
 ccdk build
 
 # Run Claude in temporary container
-ccdk run
+ccdk run                      # Default instance
+ccdk run dev                  # Named instance
+ccdk run -i                   # Isolated mode
+ccdk run -r                   # With random suffix
 
 # Start persistent container
-ccdk start
+ccdk start                    # Default instance
+ccdk start prod -s            # Shared mode
+ccdk start test -i -r         # Isolated with random suffix
+
+# Container management
+ccdk sh dev                   # Open shell (short form)
+ccdk ps                       # List containers (short form)
+ccdk rm dev                   # Remove container (short form)
 ```
 
 ### Custom Volume Mounts
@@ -321,7 +338,7 @@ MOUNT_DATA="/path/to/data:/mnt/data:ro"
 MOUNT_CACHE="/home/user/.cache:/workspace/.cache:cached"
 ```
 
-See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation and [docs/CCDK_USAGE.md](docs/CCDK_USAGE.md) for ccdk command reference.
+See [docker/claude-code/README.md](docker/claude-code/README.md) for detailed Docker documentation and the [CLI Reference Guide](docs/CLI_REFERENCE.md) for complete command reference.
 
 ## Troubleshooting
 

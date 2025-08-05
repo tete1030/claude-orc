@@ -22,16 +22,16 @@ class LaunchCommand(BaseCommand):
     
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
-            "--team",
-            required=True,
+            "team",
             help="Team configuration name"
         )
         parser.add_argument(
-            "--name",
-            help="Override context name"
+            "name",
+            nargs="?",
+            help="Context name (defaults to team name)"
         )
         parser.add_argument(
-            "--model",
+            "-m", "--model",
             help="Override all agents' models"
         )
         parser.add_argument(
@@ -41,26 +41,26 @@ class LaunchCommand(BaseCommand):
             help="Override specific agent model (format: Agent=model)"
         )
         parser.add_argument(
-            "--force", "-f",
+            "-f", "--force",
             action="store_true",
             help="Force kill existing session if it exists"
         )
         parser.add_argument(
-            "--debug",
+            "-d", "--debug",
             action="store_true",
             help="Enable debug mode"
         )
         parser.add_argument(
-            "--task",
+            "-t", "--task",
             help="Initial task for the team (will be added to Architect prompt)"
         )
         parser.add_argument(
-            "--no-auto-cleanup",
+            "-n", "--no-auto-cleanup",
             action="store_true",
             help="Disable automatic context cleanup on exit"
         )
         parser.add_argument(
-            "--fresh",
+            "-F", "--fresh",
             action="store_true",
             help="Force new sessions, ignore existing session IDs"
         )
@@ -72,7 +72,7 @@ class LaunchCommand(BaseCommand):
         # Launch the team
         success = manager.launch_team(
             team_name=args.team,
-            context_name=args.name,
+            context_name=args.name,  # Will be None if not provided, handled by launch_team
             model_override=args.model,
             agent_model_overrides=agent_model_overrides,
             force=args.force,

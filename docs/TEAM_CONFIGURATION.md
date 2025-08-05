@@ -93,41 +93,59 @@ Data Engineering Team data-team                4        examples/teams
 Basic team launch:
 
 ```bash
-ccorc launch --team devops-team
+ccorc launch devops-team
 ```
 
 ### CLI Override Options
 
 Override team settings during launch:
 
-**Session Name Override:**
+**Context Name Override:**
 ```bash
-ccorc launch --team devops-team --session my-session
+ccorc launch devops-team my-context
 ```
 
 **Global Model Override:**
 ```bash
-ccorc launch --team devops-team --model opus
+ccorc launch devops-team -m opus
 ```
 
 **Agent-Specific Model Overrides:**
 ```bash
-ccorc launch --team devops-team --agent-model "Architect=opus" --agent-model "Developer=sonnet"
+ccorc launch devops-team --agent-model "Architect=opus" --agent-model "Developer=sonnet"
 ```
 
 **Force Kill Existing Session:**
 ```bash
-ccorc launch --team devops-team --force
+ccorc launch devops-team -f
 ```
 
 **Debug Mode:**
 ```bash
-ccorc launch --team devops-team --debug
+ccorc launch devops-team -d      # Short form
+ccorc launch devops-team --debug # Long form
+```
+
+**Initial Task:**
+```bash
+ccorc launch devops-team -t "Build authentication system"
+```
+
+**Fresh Sessions:**
+```bash
+ccorc launch devops-team -F       # Force fresh sessions
+```
+
+**No Auto-Cleanup:**
+```bash
+ccorc launch devops-team -n       # Disable auto-cleanup on exit
 ```
 
 **Combined Options:**
 ```bash
-ccorc launch --team devops-team --session custom-session --model sonnet --debug --force
+ccorc launch devops-team custom-context -m sonnet -d -f
+ccorc launch security-team -t "Audit codebase" -F -n
+ccorc launch data-team project-x -m opus -f -d -t "Process dataset" -n -F
 ```
 
 ### Team Context Management
@@ -149,7 +167,7 @@ ccorc health team-session-name
 
 Clean up a team context:
 ```bash
-ccorc clean team-session-name
+ccorc rm team-session-name
 ```
 
 ## Creating Custom Teams
@@ -267,7 +285,7 @@ settings:
 
 Launch the team:
 ```bash
-ccorc launch --team simple-team
+ccorc launch simple-team
 ```
 
 ### Creating a Team with Custom Prompts

@@ -287,6 +287,6 @@ fi
 ---
 
 For more information, see:
-- `docs/CCORC_SESSION_MANAGEMENT_GUIDE.md` - Team context management
-- `docs/CCDK_USAGE.md` - Docker container management
+- [Session Architecture Guide](SESSION_ARCHITECTURE.md) - Team context and session management
+- [CLI Reference Guide](CLI_REFERENCE.md) - Complete CLI documentation
 - `src/team_context_manager.py` - Team context persistence implementation

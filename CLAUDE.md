@@ -288,13 +288,13 @@ The orchestrator now detects existing tmux sessions to prevent accidental overwr
 Example usage:
 ```bash
 # Will fail if session exists
-ccorc launch --team devops-team
+ccorc launch devops-team
 
 # Force kill existing session
-ccorc launch --team devops-team --force
+ccorc launch devops-team -f
 
 # Use different session name
-ccorc launch --team devops-team --session my-custom-session
+ccorc launch devops-team my-custom-session
 ```
 
 ## Session Persistence (Technical Details)
@@ -323,16 +323,17 @@ The orchestrator supports automatic session persistence using Claude's built-in 
 ### Testing Session Persistence
 ```bash
 # Launch team and create sessions
-ccorc launch --team devops-team
+ccorc launch devops-team
 
 # Verify session IDs are stored
 ccorc info devops-team  # Shows session IDs
 
 # Stop and restart - should auto-resume
-ccorc launch --team devops-team
+ccorc launch devops-team
 
 # Force fresh sessions
-ccorc launch --team devops-team --fresh
+ccorc launch devops-team -F       # Short form
+ccorc launch devops-team --fresh  # Long form
 ```
 
 ## Background Process Management
@@ -352,7 +353,7 @@ ccorc launch --team devops-team --fresh
 ### Usage:
 ```bash
 # Start team in background
-claude-bg start 'ccorc launch --team devops-team --session bg-demo' team-demo
+claude-bg start 'ccorc launch devops-team bg-demo' team-demo
 
 # Check status
 claude-bg status team-demo_[timestamp]
@@ -388,7 +389,7 @@ When making changes:
 1. **Start with Examples**: Use `examples/teams/devops-team/` as a template
 2. **YAML Structure**: Follow the established team.yaml format with team, agents, and settings sections
 3. **Agent Prompts**: Create `.md` files for agent-specific prompts (optional but recommended)
-4. **Test Early**: Use `ccorc launch --team your-team` to test configurations immediately
+4. **Test Early**: Use `ccorc launch your-team` to test configurations immediately
 
 #### Team Configuration Patterns
 ```yaml

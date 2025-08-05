@@ -89,7 +89,7 @@ class ConfigurableClaudeLauncher:
         # Insert ccdk parameters before "run"
         if ccdk_params:
             params_str = " ".join(ccdk_params)
-            base_cmd = base_cmd.replace("ccdk run", f"ccdk {params_str} run", 1)
+            base_cmd = base_cmd.replace("ccdk run", f"ccdk run {params_str}", 1)
         
         return base_cmd
 

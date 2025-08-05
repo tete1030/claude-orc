@@ -1,153 +1,99 @@
-# Orchestrator Documentation
+# Documentation Index
 
 Welcome to the Claude Multi-Agent Orchestrator documentation. This guide will help you understand, use, and extend the orchestrator system.
 
-## Documentation Structure
-
-### 📚 Core Documentation
-
-1. **[Architecture Guide](ARCHITECTURE.md)**
-   - System design and components
-   - Data flow and threading model
-   - Security and performance considerations
-   - Future architecture plans
-
-2. **[API Reference](API_REFERENCE.md)**
-   - Complete API documentation
-   - Class and method references
-   - Command protocol specification
-   - Code examples
-
-3. **[Troubleshooting Guide](TROUBLESHOOTING.md)**
-   - Common issues and solutions
-   - Debugging techniques
-   - Diagnostic commands
-   - Emergency recovery procedures
-
-4. **[Development Guide](DEVELOPMENT.md)**
-   - Setting up development environment
-   - Code style and best practices
-   - Testing strategies
-   - Contributing guidelines
-
-### 🔧 Implementation Details
-
-5. **[Session Management](SESSION_MANAGEMENT.md)**
-   - How Claude sessions work
-   - Session ID strategy
-   - File monitoring implementation
-   - Session lifecycle
-
-6. **[Command Protocol](COMMAND_PROTOCOL.md)**
-   - XML command format details
-   - Supporting multiple formats
-   - Extending the protocol
-   - Message routing logic
-
-7. **[Implementation Notes](IMPLEMENTATION_NOTES.md)**
-   - Evolution of the implementation
-   - Key discoveries and decisions
-   - Lessons learned
-
-### 🔬 Research & History
-
-8. **[Research Documentation](research/)**
-   - Original research and experiments
-   - Technical discoveries
-   - Historical development artifacts
-
-### 📋 Quick References
-
-9. **[Quick Start](../README.md#quick-start)**
-   - Installation steps
-   - Basic example
-   - First orchestrator setup
-
-10. **[Examples](../examples/)**
-   - `basic_two_agent.py` - Simple master-worker setup
-   - `verify_claude_setup.py` - Check Claude CLI installation
-
-## Getting Started
+## 🚀 Getting Started
 
 ### For Users
-
-1. Start with the [Quick Start](../README.md#quick-start) in the main README
-2. Review [Architecture](ARCHITECTURE.md) to understand the system
-3. Check [API Reference](API_REFERENCE.md) for detailed usage
-4. Use [Troubleshooting](TROUBLESHOOTING.md) when you encounter issues
+- **[Usage Guide](USAGE_GUIDE.md)** - Core concepts, workflows, and best practices
+- **[CLI Reference](CLI_REFERENCE.md)** - Complete command reference for `ccorc` and `ccdk`
+- **[Quick Start](../README.md#quick-start)** - Installation and first steps
 
 ### For Developers
+- **[Development Guide](DEVELOPMENT.md)** - Setting up development environment
+- **[CLAUDE.md](../CLAUDE.md)** - Essential guide for AI agents working on this codebase
 
-1. Read the [Development Guide](DEVELOPMENT.md) to set up your environment
-2. Understand the [Architecture](ARCHITECTURE.md) before making changes
-3. Follow the code style guidelines
-4. Write tests for new features
+## 📚 Core Documentation
 
-## Key Concepts
+### Configuration & Teams
+- **[Team Configuration Guide](TEAM_CONFIGURATION.md)** - Creating and configuring custom teams
+- **[Pre-built Teams](../examples/teams/)** - Ready-to-use team configurations
 
-### Agents
-Autonomous Claude instances that can communicate with each other through the orchestrator.
+### Architecture & Design
+- **[Session Architecture](SESSION_ARCHITECTURE.md)** - Team contexts and session persistence
+- **[Architecture Overview](ARCHITECTURE.md)** - System design and components
+- **[State Detection](state_detection_diagnostics.md)** - Agent state monitoring details
 
-### Commands
-XML-formatted messages that agents embed in their responses to communicate.
+### Advanced Topics
+- **[Cost Monitoring Guide](COST_MONITORING_GUIDE.md)** - Integrating with cost tracking tools
+- **[Docker Environment](../docker/claude-code/README.md)** - CCBox container details
+- **[Background Processing](../scripts/claude-bg)** - Running teams in background
 
-### Mailbox
-Message queue system where messages wait until the recipient agent checks them.
+## 🔧 Reference Documentation
 
-### Session Files
-JSONL files that Claude uses to store conversation history, monitored by the orchestrator.
+### API & Protocols
+- **[API Reference](API_REFERENCE.md)** - Complete API documentation
+- **[Command Protocol](COMMAND_PROTOCOL.md)** - XML command format details
 
-## Common Tasks
+### Troubleshooting
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Diagnostic Tools](../scripts/)** - Utilities for debugging
 
-### Running Two Agents
-```python
-from src.orchestrator import Orchestrator, OrchestratorConfig
+## 📋 Quick Reference
 
-config = OrchestratorConfig(session_name="my-agents")
-orc = Orchestrator(config)
+### Common Commands
+```bash
+# Team management
+ccorc launch devops-team              # Launch team
+ccorc ls                              # List contexts
+ccorc info my-project                 # Show details
+ccorc rm my-project                   # Clean up
 
-orc.register_agent(name="Agent1", session_id="session-id", 
-                   system_prompt="Your instructions...")
-orc.register_agent(name="Agent2", session_id="session-id",
-                   system_prompt="Your instructions...")
-
-if orc.start():
-    # Agents are running
-    pass
+# Container management
+ccdk run dev                          # Run Claude
+ccdk sh frontend                      # Open shell
+ccdk ps                               # List containers
 ```
 
-### Sending Messages Between Agents
-Agents use XML commands in their responses:
-```xml
-<orc-command name="send_message" from="Agent1" to="Agent2">
-Your message here
-</orc-command>
+### Key Concepts
+- **Teams**: Pre-configured groups of agents with specific roles
+- **Contexts**: Persistent team sessions that survive restarts
+- **Agents**: Individual Claude instances that communicate via MCP
+- **Sessions**: Conversation history that persists across launches
+
+## 🔬 Research & Implementation
+
+### Technical Details
+- **[Implementation Notes](IMPLEMENTATION_NOTES.md)** - Evolution and key decisions
+- **[Session Management](SESSION_MANAGEMENT.md)** - How Claude sessions work
+- **[Research Documentation](research/)** - Original research and experiments
+
+### Architecture Research
+- **[Architecture Research](research/ARCHITECTURE_RESEARCH.md)** - Design explorations
+- **[CLI Options Discovery](research/CLI_OPTIONS_DISCOVERED.md)** - Claude CLI capabilities
+
+## 📁 Documentation Structure
+
+```
+docs/
+├── README.md                    # This file
+├── USAGE_GUIDE.md              # User guide
+├── CLI_REFERENCE.md            # Command reference
+├── TEAM_CONFIGURATION.md       # Team setup guide
+├── SESSION_ARCHITECTURE.md     # Context persistence
+├── DEVELOPMENT.md              # Developer guide
+├── TROUBLESHOOTING.md          # Problem solving
+├── research/                   # Research documents
+└── archive/                    # Deprecated docs
 ```
 
-### Debugging Issues
-1. Enable debug logging
-2. Check tmux session: `tmux attach -t <session-name>`
-3. Verify session files exist
-4. See [Troubleshooting Guide](TROUBLESHOOTING.md)
+## 🆘 Getting Help
 
-## System Requirements
+1. Check the relevant guide above
+2. Use diagnostic tools: `python scripts/diagnose_agent_states.py`
+3. Review [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+4. Check [closed issues](https://github.com/anthropics/claude-orchestrator/issues?q=is%3Aissue+is%3Aclosed)
 
-- Python 3.8+
-- tmux
-- Claude CLI (authenticated)
-- Unix-like OS (Linux, macOS)
-
-## Support
-
-For issues and questions:
-1. Check the [Troubleshooting Guide](TROUBLESHOOTING.md)
-2. Review [closed issues](../issues?q=is%3Aissue+is%3Aclosed)
-3. Open a new issue with diagnostic information
-
-## Contributing
+## 📝 Contributing
 
 See the [Development Guide](DEVELOPMENT.md) for contribution guidelines.
-
-## License
-
-[Your license information]

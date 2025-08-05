@@ -22,7 +22,9 @@ class CommandRegistry:
     
     def __init__(self):
         self.commands: Dict[str, BaseCommand] = {}
+        self.aliases: Dict[str, str] = {}
         self._register_commands()
+        self._register_aliases()
     
     def _register_commands(self) -> None:
         """Register all available commands"""
@@ -41,6 +43,12 @@ class CommandRegistry:
             cmd = cmd_class()
             self.commands[cmd.name] = cmd
     
+    def _register_aliases(self) -> None:
+        """Register command aliases"""
+        # Short aliases for common commands
+        self.aliases["ls"] = "list"
+        self.aliases["rm"] = "clean"
+    
     def setup_parser(self, parser: ArgumentParser) -> None:
         """Set up argument parser with all commands"""
         subparsers = parser.add_subparsers(
@@ -48,17 +56,33 @@ class CommandRegistry:
             help="Available commands"
         )
         
+        # Register main commands
         for cmd in self.commands.values():
             subparser = subparsers.add_parser(
                 cmd.name,
                 help=cmd.help
             )
             cmd.add_arguments(subparser)
+        
+        # Register aliases
+        for alias, target in self.aliases.items():
+            if target in self.commands:
+                cmd = self.commands[target]
+                subparser = subparsers.add_parser(
+                    alias,
+                    help=f"{cmd.help} (alias for {target})"
+                )
+                cmd.add_arguments(subparser)
     
     def execute_command(self, args, manager) -> int:
         """Execute the specified command"""
-        if args.command in self.commands:
-            cmd = self.commands[args.command]
+        # Resolve alias to actual command
+        command_name = args.command
+        if command_name in self.aliases:
+            command_name = self.aliases[command_name]
+        
+        if command_name in self.commands:
+            cmd = self.commands[command_name]
             
             # Validate arguments
             error = cmd.validate_args(args)
