@@ -8,13 +8,73 @@ This guide covers how to use the Claude Multi-Agent Orchestrator system, focusin
 
 ### Installation
 
-```bash
-# Install system dependencies
-./scripts/install-claude-bg.sh    # Background process manager
-./scripts/install-ccdk.sh         # Docker management CLI
-./scripts/install-ccorc.sh        # Team context manager
+The Claude Multi-Agent Orchestrator can be installed in several ways depending on your needs:
 
-# Set up Python environment with Poetry
+#### Local Installation
+
+There are multiple methods to install ccorc locally:
+
+1. **Install from source with pip**:
+   ```bash
+   pip install /path/to/claude-orc
+   ```
+
+2. **Install in editable mode** (recommended for development):
+   ```bash
+   pip install -e /path/to/claude-orc
+   ```
+
+3. **Install with Poetry** (if working with the source code):
+   ```bash
+   cd /path/to/claude-orc
+   poetry install
+   ```
+
+#### Docker Installation
+
+When using the Docker environment, ccorc is pre-installed in the container image:
+
+- No need to mount source code for ccorc to work
+- The Docker image includes ccorc as a standalone package
+- Simply use `ccdk run` or `ccdk start` to launch containers with ccorc available
+
+#### Team Configuration Paths
+
+The system searches for team configurations in these locations (in order):
+
+1. Current directory: `teams/`
+2. User home directory: `~/.ccorc/teams/`
+3. Package data directory (for built-in teams)
+
+You can also set custom paths using the `CCORC_TEAMS_PATH` environment variable:
+```bash
+export CCORC_TEAMS_PATH="/path/to/teams:/another/path/to/teams"
+```
+
+**Note**: The CCORC_TEAMS_PATH environment variable uses colon-separated paths (like PATH). There are ongoing investigations regarding YAML file handling with this variable - check the latest documentation for updates.
+
+#### Development Usage
+
+For backward compatibility, the original wrapper script still works:
+```bash
+# From the claude-orc directory
+bin/ccorc [command]
+```
+
+This is useful when working directly with the source code without installing the package.
+
+#### System Utilities
+
+After installation, install the supporting utilities:
+
+```bash
+# Install background process manager
+./scripts/install-claude-bg.sh
+
+# Install Docker management CLI
+./scripts/install-ccdk.sh
+
+# Set up Python environment with Poetry (if needed)
 poetry install --no-dev           # Production dependencies only
 poetry shell                      # Activate environment
 ```

@@ -80,7 +80,7 @@ ccorc launch devops-team -F        # Force new sessions
 # Launch with options
 ccorc launch devops-team -t "Build auth system"     # With initial task
 ccorc launch devops-team -d                         # Debug mode
-ccorc launch devops-team -n                         # No auto-cleanup
+ccorc launch devops-team --rm                       # auto-cleanup
 ```
 
 This launches a complete team (Architect, Developer, QA, DevOps, Docs) with intelligent message delivery, agent state detection, and automatic notifications.

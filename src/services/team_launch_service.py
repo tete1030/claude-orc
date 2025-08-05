@@ -49,7 +49,7 @@ class TeamLaunchService:
         force: bool = False,
         debug: bool = False,
         task: Optional[str] = None,
-        auto_cleanup: bool = True,
+        auto_cleanup: bool = False,
         fresh: bool = False,
     ) -> bool:
         """Launch a team configuration"""

@@ -55,8 +55,10 @@ class LaunchCommand(BaseCommand):
             help="Initial task for the team (will be added to Architect prompt)"
         )
         parser.add_argument(
-            "-n", "--no-auto-cleanup",
+            "--rm",
             action="store_true",
+            dest="auto_cleanup",
+            default=False,
             help="Disable automatic context cleanup on exit"
         )
         parser.add_argument(
@@ -78,7 +80,7 @@ class LaunchCommand(BaseCommand):
             force=args.force,
             debug=args.debug,
             task=args.task,
-            auto_cleanup=not args.no_auto_cleanup,
+            auto_cleanup=args.auto_cleanup,
             fresh=args.fresh,
         )
         

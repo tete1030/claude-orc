@@ -24,16 +24,16 @@ Options:
   -f, --force       Force kill existing session if it exists
   -d, --debug       Enable debug mode
   -t, --task        Initial task for the team
-  -n, --no-auto-cleanup    Disable automatic context cleanup on exit
+  --rm              Automatic context cleanup on exit
   -F, --fresh       Force new sessions, ignore existing session IDs
   --agent-model     Override specific agent model (format: Agent=model)
 
 Examples:
   ccorc launch devops-team
-  ccorc launch devops-team my-project
+  ccorc launch devops-team my-project --rm
   ccorc launch security-team -t "Audit the codebase"
   ccorc launch data-team -m opus -d -F
-  ccorc launch devops-team prod -f -n -t "Deploy v2.0"
+  ccorc launch devops-team prod -f -t "Deploy v2.0"
 ```
 
 #### `ls` / `list` - List all team contexts
@@ -253,8 +253,8 @@ ccorc launch devops-team -t "Build auth system" -d
 # Fresh start with model override
 ccorc launch security-team -m opus -F
 
-# Full options
-ccorc launch data-team analytics -m sonnet -f -d -t "Process Q4 data" -n -F
+# Full options (with auto-cleanup)
+ccorc launch data-team analytics -m sonnet -f -d -t "Process Q4 data" --rm -F
 ```
 
 ### Container Management
@@ -295,7 +295,7 @@ ccorc rm my-project -f
    - `ccdk ps` instead of `ccdk list`
 
 2. **Combine options efficiently**:
-   - `ccorc launch team -d -F -n` for debug fresh sessions without cleanup
+   - `ccorc launch team -d -F --rm` for debug fresh sessions with auto-cleanup
    - `ccdk run dev -i -r` for isolated container with random suffix
 
 3. **Use positional arguments**:

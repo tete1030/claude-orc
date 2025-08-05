@@ -94,7 +94,7 @@ CLAUDE_INSTANCE=test CLAUDE_INSTANCE_RANDOM=true ccdk start
 - **Auto-build**: The image is automatically built on first use if it doesn't exist
 - **Multiple instances**: Run multiple Claude Code containers simultaneously using `CLAUDE_INSTANCE`
 - **Random suffix support**: Generate unique container names with `--random` flag or `CLAUDE_INSTANCE_RANDOM=true`
-- **Temporary containers**: Use `run` command for one-off tasks (auto-cleanup)
+- **Temporary containers**: Use `run` command with `--rm` for one-off tasks (auto-cleanup)
 - **Persistent containers**: Use `start/stop` for long-running work
 - **Auto-start Claude Code**: When no command is specified, automatically runs `claude --dangerously-skip-permissions`
 - **Auto-source venv**: Automatically sources Python virtual environment if it exists

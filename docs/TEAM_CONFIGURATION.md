@@ -136,16 +136,16 @@ ccorc launch devops-team -t "Build authentication system"
 ccorc launch devops-team -F       # Force fresh sessions
 ```
 
-**No Auto-Cleanup:**
+**Auto-Cleanup:**
 ```bash
-ccorc launch devops-team -n       # Disable auto-cleanup on exit
+ccorc launch devops-team --rm       # Enable auto-cleanup on exit
 ```
 
 **Combined Options:**
 ```bash
 ccorc launch devops-team custom-context -m sonnet -d -f
-ccorc launch security-team -t "Audit codebase" -F -n
-ccorc launch data-team project-x -m opus -f -d -t "Process dataset" -n -F
+ccorc launch security-team -t "Audit codebase" -F
+ccorc launch data-team project-x -m opus -f -d -t "Process dataset" -F
 ```
 
 ### Team Context Management

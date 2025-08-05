@@ -32,6 +32,8 @@ Example configuration structure:
 
 import json
 import logging
+import os
+import site
 from pathlib import Path
 from typing import Dict, List, Optional, TypedDict, Any, cast
 from dataclasses import dataclass, field
@@ -92,12 +94,12 @@ class TeamConfigLoader:
 
         Args:
             search_paths: List of paths to search for config files.
-                         Defaults to ['teams/', 'examples/teams/']
+                         Defaults to multiple locations including package data
         """
         self.logger = logging.getLogger(__name__)
 
         if search_paths is None:
-            self.search_paths = [Path("teams"), Path("examples/teams")]
+            self.search_paths = self._get_default_search_paths()
         else:
             self.search_paths = search_paths
 
@@ -107,6 +109,58 @@ class TeamConfigLoader:
             "default_model": "sonnet",
             "orchestrator_type": "enhanced",
         }
+    
+    def _get_default_search_paths(self) -> List[Path]:
+        """Get default search paths for team configurations.
+        
+        Returns paths in priority order:
+        1. Current directory teams/
+        2. ~/.ccorc/teams/
+        3. CCORC_TEAMS_PATH environment variable (if set)
+        4. Package data (site-packages/examples/teams/)
+        5. Local examples/teams/ (for development)
+        """
+        paths = []
+        
+        # Current directory teams/
+        paths.append(Path("teams"))
+        
+        # User home directory ~/.ccorc/teams/
+        home_teams = Path.home() / ".ccorc" / "teams"
+        paths.append(home_teams)
+        
+        # Environment variable paths
+        env_paths = os.environ.get("CCORC_TEAMS_PATH", "")
+        if env_paths:
+            for path in env_paths.split(":"):
+                paths.append(Path(path))
+        
+        # Package data paths (when installed via pip)
+        try:
+            # Try to find package data location
+            for site_dir in site.getsitepackages():
+                site_path = Path(site_dir)
+                pkg_teams = site_path / "examples" / "teams"
+                if pkg_teams.exists():
+                    paths.append(pkg_teams)
+                    break
+        except Exception:
+            # Ignore errors in finding site packages
+            pass
+        
+        # Local development path
+        paths.append(Path("examples/teams"))
+        
+        # Filter out non-existent paths but log them
+        existing_paths = []
+        for path in paths:
+            if path.exists():
+                existing_paths.append(path)
+                self.logger.debug(f"Team search path found: {path}")
+            else:
+                self.logger.debug(f"Team search path not found (skipped): {path}")
+        
+        return existing_paths if existing_paths else [Path("teams"), Path("examples/teams")]
 
     def find_config_file(self, config_name: str) -> Optional[Path]:
         """Find a configuration file by name in search paths.

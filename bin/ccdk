@@ -100,7 +100,7 @@ parse_command_and_options() {
             -m|--model)
                 MODEL_NAME="$2"
                 shift 2
-                ;;
+                ;;                
             *)
                 PARSED_ARGS+=("$1")
                 shift
@@ -108,22 +108,6 @@ parse_command_and_options() {
         esac
     done
 }
-
-# Arguments will be parsed after function definitions
-
-# Export parsed values
-{ [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ] ; } && export CLAUDE_INSTANCE="${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
-[ -n "$MODEL_NAME" ] && export ANTHROPIC_MODEL="$MODEL_NAME"
-[ -n "$CONTAINER_MODE" ] && export CLAUDE_CONTAINER_MODE="$CONTAINER_MODE"
-
-# No parsing - context and role come from explicit parameters
-
-# Set container name based on instance (including random suffix if present)
-if [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ]; then
-    CONTAINER_NAME="${DEFAULT_CONTAINER_NAME}-${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
-else
-    CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
-fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -659,10 +643,7 @@ list_containers() {
 
 # Clean up
 clean_up() {
-    local filter=""
-    if [ ${#PARSED_ARGS[@]} -gt 0 ]; then
-        filter="${PARSED_ARGS[0]}"
-    fi
+    local filter="$INSTANCE_NAME"
     
     # Check if a filter was provided
     if [ -n "$filter" ]; then
@@ -718,6 +699,20 @@ check_dependencies
 # Parse command line arguments
 parse_command_and_options "$@"
 
+# Export parsed values
+{ [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ] ; } && export CLAUDE_INSTANCE="${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
+[ -n "$MODEL_NAME" ] && export ANTHROPIC_MODEL="$MODEL_NAME"
+[ -n "$CONTAINER_MODE" ] && export CLAUDE_CONTAINER_MODE="$CONTAINER_MODE"
+
+# No parsing - context and role come from explicit parameters
+
+# Set container name based on instance (including random suffix if present)
+if [ -n "$INSTANCE_NAME" ] || [ -n "$RANDOM_INSTANCE_SUFFIX" ]; then
+    CONTAINER_NAME="${DEFAULT_CONTAINER_NAME}-${INSTANCE_NAME}${RANDOM_INSTANCE_SUFFIX}"
+else
+    CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+fi
+
 # Check if command was provided
 if [[ -z "$COMMAND" ]]; then
     print_usage
@@ -741,7 +736,7 @@ case "$COMMAND" in
         exec_shell
         ;;
     run)
-        run_temporary "${PARSED_ARGS[@]}"
+        run_temporary
         ;;
     cc)
         claude_code

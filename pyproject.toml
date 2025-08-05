@@ -19,6 +19,8 @@ classifiers = [
 homepage = "https://github.com/anthropics/claude-orc"
 repository = "https://github.com/anthropics/claude-orc"
 documentation = "https://github.com/anthropics/claude-orc/tree/main/docs"
+packages = [{include = "src"}, {include = "examples"}]
+include = ["examples/teams/**/*"]
 
 [tool.poetry.dependencies]
 python = "^3.12.11"
@@ -39,6 +41,7 @@ isort = "^5.12.0"
 [tool.poetry.scripts]
 claude-bg = "bin.claude_bg:main"
 ccdk = "bin.ccdk:main"
+ccorc = "src.cli.ccorc_main:main"
 
 [build-system]
 requires = ["poetry-core"]
