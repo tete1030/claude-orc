@@ -60,11 +60,11 @@ class TestOrchestrator(unittest.TestCase):
         
     def test_register_agent_duplicate(self):
         """Test registering duplicate agent"""
-        self.orchestrator.register_agent("agent1", "session-1", "prompt")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt", working_dir=None)
         
         # Should raise ValueError for duplicate
         with self.assertRaises(ValueError) as cm:
-            self.orchestrator.register_agent("agent1", "session-2", "prompt")
+            self.orchestrator.register_agent("agent1", "session-2", "prompt", working_dir=None)
         
         self.assertIn("already registered", str(cm.exception))
         self.assertEqual(len(self.orchestrator.agents), 1)
@@ -92,8 +92,8 @@ class TestOrchestrator(unittest.TestCase):
         self.session_helper.create_session_file(self.temp_session_dir, session_id2)
         
         # Register agents
-        self.orchestrator.register_agent("agent1", session_id1, "prompt1")
-        self.orchestrator.register_agent("agent2", session_id2, "prompt2")
+        self.orchestrator.register_agent("agent1", session_id1, "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", session_id2, "prompt2", working_dir=None)
         
         # Start orchestrator
         result = self.orchestrator.start()
@@ -135,7 +135,7 @@ class TestOrchestrator(unittest.TestCase):
         mock_tmux.create_session.return_value = False
         self.orchestrator.tmux = mock_tmux
         
-        self.orchestrator.register_agent("agent1", "session-1", "prompt")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt", working_dir=None)
         result = self.orchestrator.start()
         
         self.assertFalse(result)
@@ -144,8 +144,8 @@ class TestOrchestrator(unittest.TestCase):
     def test_process_command_send_message(self):
         """Test processing send_message command"""
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "session-2", "prompt2")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "prompt2", working_dir=None)
         
         # Mock tmux
         self.orchestrator.tmux = MagicMock()
@@ -176,8 +176,8 @@ class TestOrchestrator(unittest.TestCase):
     def test_process_command_high_priority_interrupt(self):
         """Test high priority message sends interrupt"""
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "session-2", "prompt2")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "prompt2", working_dir=None)
         
         # Mock tmux
         self.orchestrator.tmux = MagicMock()
@@ -208,8 +208,8 @@ class TestOrchestrator(unittest.TestCase):
     def test_interrupt_cooldown(self):
         """Test interrupt cooldown prevents spam"""
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "session-2", "prompt2")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "prompt2", working_dir=None)
         
         # Mock tmux
         self.orchestrator.tmux = MagicMock()
@@ -246,8 +246,8 @@ class TestOrchestrator(unittest.TestCase):
     def test_handle_list_agents(self):
         """Test list_agents command handler"""
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "session-2", "prompt2")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "prompt2", working_dir=None)
         
         # Add message to agent2 mailbox
         self.orchestrator.mailbox["agent2"].append({"test": "message"})
@@ -281,7 +281,7 @@ class TestOrchestrator(unittest.TestCase):
     def test_handle_mailbox_check_with_messages(self):
         """Test mailbox_check with pending messages"""
         # Register agent
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
         
         # Add messages to mailbox
         self.orchestrator.mailbox["agent1"] = [
@@ -333,7 +333,7 @@ class TestOrchestrator(unittest.TestCase):
     def test_handle_mailbox_check_empty(self):
         """Test mailbox_check with no messages"""
         # Register agent
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
         
         # Mock tmux
         self.orchestrator.tmux = MagicMock()
@@ -357,7 +357,7 @@ class TestOrchestrator(unittest.TestCase):
     def test_handle_context_status(self):
         """Test context_status command"""
         # Register agent
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
         
         # Mock monitor
         mock_monitor = MagicMock()
@@ -389,7 +389,7 @@ class TestOrchestrator(unittest.TestCase):
     def test_send_to_agent(self):
         """Test sending direct message to agent"""
         # Register agent
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
         
         # Mock tmux
         self.orchestrator.tmux = MagicMock()
@@ -412,7 +412,7 @@ class TestOrchestrator(unittest.TestCase):
     def test_get_agent_status(self):
         """Test getting agent status"""
         # Register agent
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
         
         # Add mailbox message
         self.orchestrator.mailbox["agent1"].append({"test": "message"})
@@ -439,8 +439,8 @@ class TestOrchestrator(unittest.TestCase):
     def test_get_all_agent_status(self):
         """Test getting status of all agents"""
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "prompt1")
-        self.orchestrator.register_agent("agent2", "session-2", "prompt2")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "prompt2", working_dir=None)
         
         # Get all status
         all_status = self.orchestrator.get_all_agent_status()
@@ -484,7 +484,7 @@ class TestOrchestrator(unittest.TestCase):
         mock_monitor_class.return_value = mock_monitor
         
         # Register agent and start
-        self.orchestrator.register_agent("agent1", session_id, "prompt1")
+        self.orchestrator.register_agent("agent1", session_id, "prompt1", working_dir=None)
         self.orchestrator.start()
         
         # Let monitor loop run briefly

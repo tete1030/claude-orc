@@ -69,10 +69,13 @@ class TestConfigurableClaudeLauncher:
         
         launcher = ConfigurableClaudeLauncher(mock_launcher_class, agent_configs)
         
-        result = launcher.build_command_string("TestAgent", "session_1", "prompt")
+        result = launcher.build_command_string("TestAgent", "session_1", "prompt", False)
         
-        assert "ccdk --model opus" in result
-        assert "test-instance" in mock_launcher_class.build_command_string.call_args[0]
+        assert "ccdk -m opus" in result
+        # Check that build_command_string was called with correct arguments
+        call_args = mock_launcher_class.build_command_string.call_args[0]
+        assert call_args[0] == "TestAgent"  # instance_name (passed through as-is)
+        assert call_args[3] == False  # resume parameter
     
     def test_build_command_with_debug(self):
         """Test command building with debug flag"""
@@ -83,10 +86,10 @@ class TestConfigurableClaudeLauncher:
         
         launcher = ConfigurableClaudeLauncher(mock_launcher_class, agent_configs, debug=True)
         
-        result = launcher.build_command_string("TestAgent", "session_1", "prompt")
+        result = launcher.build_command_string("TestAgent", "session_1", "prompt", False)
         
-        assert "--debug" in result
-        assert "--model sonnet" in result
+        assert "ccdk -m sonnet" in result
+        # Note: debug flag is not passed to ccdk command, only used internally
     
     def test_build_command_no_model(self):
         """Test command building without model override"""
@@ -97,7 +100,7 @@ class TestConfigurableClaudeLauncher:
         
         launcher = ConfigurableClaudeLauncher(mock_launcher_class, agent_configs)
         
-        result = launcher.build_command_string("TestAgent", "session_1", "prompt")
+        result = launcher.build_command_string("TestAgent", "session_1", "prompt", False)
         
         # Should not modify command if no model specified
         assert result == "ccdk run agent"

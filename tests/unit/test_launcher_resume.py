@@ -56,10 +56,10 @@ class TestSimpleLauncherResume:
         assert session_id is not None
         assert isinstance(session_id, str)
     
-    @patch('src.simple_launcher.ClaudeLauncherConfig.build_resume_command_string')
-    def test_launch_agent_resume_mode(self, mock_build_resume_cmd, launcher):
+    @patch('src.simple_launcher.ClaudeLauncherConfig.build_command_string')
+    def test_launch_agent_resume_mode(self, mock_build_cmd, launcher):
         """Test launching agent in resume mode"""
-        mock_build_resume_cmd.return_value = "claude chat --resume test-session-456"
+        mock_build_cmd.return_value = "claude chat --resume test-session-456"
         # Mock tmux._run_command to track command sending
         launcher.tmux._run_command = Mock()
         
@@ -71,11 +71,12 @@ class TestSimpleLauncherResume:
         )
         
         # Verify resume command was built
-        mock_build_resume_cmd.assert_called_once_with(
-            instance_name="TestAgent",
-            session_id="test-session-456",
-            mcp_config_path=None
-        )
+        mock_build_cmd.assert_called_once()
+        call_args = mock_build_cmd.call_args[1]
+        assert call_args["instance_name"] == "TestAgent"
+        assert call_args["session_id"] == "test-session-456"
+        assert call_args["resume"] == True
+        assert call_args["mcp_config_path"] is None
         
         # Verify tmux command was sent
         assert launcher.tmux._run_command.called
@@ -85,6 +86,9 @@ class TestSimpleLauncherResume:
     
     def test_launch_agent_with_mcp_config(self, launcher):
         """Test launching agent with MCP configuration"""
+        # Set shared_mcp_dir to avoid ValueError
+        launcher.shared_mcp_dir = "/tmp/test_mcp"
+        
         # Mock tmux._run_command to track command sending
         launcher.tmux._run_command = Mock()
         
@@ -124,9 +128,11 @@ class TestClaudeLauncherConfigResume:
     
     def test_build_resume_command_string(self):
         """Test building resume command string"""
-        cmd = ClaudeLauncherConfig.build_resume_command_string(
+        cmd = ClaudeLauncherConfig.build_command_string(
             instance_name="TestAgent",
-            session_id="abc-def-123"
+            session_id="abc-def-123",
+            system_prompt="Test prompt",
+            resume=True
         )
         
         # Verify command structure
@@ -138,9 +144,11 @@ class TestClaudeLauncherConfigResume:
     
     def test_build_resume_command_with_mcp(self):
         """Test building resume command with MCP config"""
-        cmd = ClaudeLauncherConfig.build_resume_command_string(
+        cmd = ClaudeLauncherConfig.build_command_string(
             instance_name="TestAgent",
             session_id="xyz-789",
+            system_prompt="Test prompt",
+            resume=True,
             mcp_config_path="/tmp/mcp_config.json"
         )
         
@@ -153,7 +161,8 @@ class TestClaudeLauncherConfigResume:
         cmd = ClaudeLauncherConfig.build_command_string(
             instance_name="TestAgent",
             session_id="new-session-123",
-            system_prompt="You are a test agent"
+            system_prompt="You are a test agent",
+            resume=False
         )
         
         # Verify command structure
@@ -174,7 +183,8 @@ class TestClaudeLauncherConfigResume:
         cmd = ClaudeLauncherConfig.build_command_string(
             instance_name="Test'Agent",
             session_id="test-123",
-            system_prompt='Test "prompt" with $pecial char$'
+            system_prompt='Test "prompt" with $pecial char$',
+            resume=False
         )
         
         # Command should be properly escaped

@@ -45,8 +45,8 @@ class TestRealIntegration:
         orchestrator = EnhancedOrchestrator(config)
         
         # Register agents (won't launch Claude, but will create tmux panes)
-        orchestrator.register_agent("TestAgent1", "session1", "Test agent 1")
-        orchestrator.register_agent("TestAgent2", "session2", "Test agent 2") 
+        orchestrator.register_agent("TestAgent1", "session1", "Test agent 1", working_dir=None)
+        orchestrator.register_agent("TestAgent2", "session2", "Test agent 2", working_dir=None) 
         
         # Start MCP server in background
         mcp_port = 8767

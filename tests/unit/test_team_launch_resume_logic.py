@@ -99,55 +99,52 @@ class TestTeamLaunchResumeLogic:
         
         mock_dependencies['context_persistence'].get_context.return_value = existing_context_with_sessions
         
-        # Mock session file existence checks
-        with patch.object(team_launch_service, '_session_file_exists') as mock_session_exists:
-            mock_session_exists.return_value = True  # All sessions exist
-            
-            # Mock orchestrator with proper attributes
-            mock_orchestrator = Mock()
-            mock_agent = Mock()
-            mock_agent.pane_index = 0
-            mock_agent.session_id = "lead-session-123"  # Will be updated for each agent
-            mock_orchestrator.register_agent.return_value = mock_agent
-            
-            # Mock orchestrator's agents dictionary for session ID updates
-            mock_orchestrator.agents = {
-                "Lead": Mock(session_id="lead-session-123"),
-                "Dev": Mock(session_id="dev-session-456"),
-                "QA": Mock(session_id="qa-session-789")
-            }
-            
-            # Mock the orchestrator's start method and running flag
-            mock_orchestrator.start.return_value = True
-            mock_orchestrator.running = False  # Don't enter infinite loop
-            
-            # Mock tmux attribute
-            mock_orchestrator.tmux = Mock(session_name="test-team")
-            
-            # Set the mock orchestrator factory to return our configured mock
-            mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
-            mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
-            # Mock tmux attribute for the orchestrator
-            mock_orchestrator.tmux = Mock()
-            mock_orchestrator.tmux.session_name = "test-team"
-            
-            # Launch with auto-resume (fresh=False, force=True to use existing context)
-            success = team_launch_service.launch_team(
-                team_name="test-team",
-                context_name="test-team",
-                fresh=False,
-                force=True  # Need force=True when context already exists
-            )
-            
-            # Verify session existence was checked for each agent
-            assert mock_session_exists.call_count == 3
-            
-            register_calls = mock_orchestrator.register_agent.call_args_list
-            assert len(register_calls) == 3
-            
-            # Check that session_id was set correctly for each agent
-            for call in register_calls:
-                assert call[1]['session_id'] is not None
+        # Session file validation removed - no longer performed
+        
+        # Mock orchestrator with proper attributes
+        mock_orchestrator = Mock()
+        mock_agent = Mock()
+        mock_agent.pane_index = 0
+        mock_agent.session_id = "lead-session-123"  # Will be updated for each agent
+        mock_orchestrator.register_agent.return_value = mock_agent
+        
+        # Mock orchestrator's agents dictionary for session ID updates
+        mock_orchestrator.agents = {
+            "Lead": Mock(session_id="lead-session-123"),
+            "Dev": Mock(session_id="dev-session-456"),
+            "QA": Mock(session_id="qa-session-789")
+        }
+        
+        # Mock the orchestrator's start method and running flag
+        mock_orchestrator.start.return_value = True
+        mock_orchestrator.running = False  # Don't enter infinite loop
+        
+        # Mock tmux attribute
+        mock_orchestrator.tmux = Mock(session_name="test-team")
+        
+        # Set the mock orchestrator factory to return our configured mock
+        mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
+        mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
+        # Mock tmux attribute for the orchestrator
+        mock_orchestrator.tmux = Mock()
+        mock_orchestrator.tmux.session_name = "test-team"
+        
+        # Launch with auto-resume (fresh=False, force=True to use existing context)
+        success = team_launch_service.launch_team(
+            team_name="test-team",
+            context_name="test-team",
+            fresh=False,
+            force=True  # Need force=True when context already exists
+        )
+        
+        # Session file validation removed - skip this check
+        
+        register_calls = mock_orchestrator.register_agent.call_args_list
+        assert len(register_calls) == 3
+        
+        # Check that session_id was set correctly for each agent
+        for call in register_calls:
+            assert call[1]['session_id'] is not None
     
     def test_fresh_flag_forces_new_sessions(
         self,
@@ -169,7 +166,11 @@ class TestTeamLaunchResumeLogic:
         mock_orchestrator.register_agent.return_value = mock_agent
         mock_orchestrator.start.return_value = True
         mock_orchestrator.running = False  # Don't enter infinite loop
-        mock_orchestrator.agents = {}  # Empty agents dict for fresh launch
+        mock_orchestrator.agents = {
+            "Lead": Mock(session_id=None),
+            "Dev": Mock(session_id=None),
+            "QA": Mock(session_id=None)
+        }
         mock_orchestrator.tmux = Mock(session_name="test-team")
         
         # Set the mock orchestrator factory to return our configured mock
@@ -231,68 +232,61 @@ class TestTeamLaunchResumeLogic:
         
         mock_dependencies['context_persistence'].get_context.return_value = partial_context
         
-        # Mock session file existence checks
-        def session_exists_side_effect(session_id, working_dir=None):
-            if session_id == "lead-session-123":
-                return True
-            elif session_id == "qa-session-789":
-                return True
-            else:
-                return False
+        # Session file validation removed - no longer performed
         
-        with patch.object(team_launch_service, '_session_file_exists', side_effect=session_exists_side_effect):
-            # Mock orchestrator with proper attributes
-            mock_orchestrator = Mock()
-            mock_agent = Mock()
-            mock_agent.pane_index = 0
-            mock_orchestrator.register_agent.return_value = mock_agent
-            mock_orchestrator.start.return_value = True
-            mock_orchestrator.running = False  # Don't enter infinite loop
-            mock_orchestrator.agents = {
-                "Lead": Mock(session_id="lead-session-123"),
-                "Dev": Mock(session_id=None),  # Will get new session
-                "QA": Mock(session_id="qa-session-789")
-            }
-            mock_orchestrator.tmux = Mock(session_name="test-team")
-            
-            # Set the mock orchestrator factory to return our configured mock
-            mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
-            mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
-            # Mock tmux attribute for the orchestrator
-            mock_orchestrator.tmux = Mock()
-            mock_orchestrator.tmux.session_name = "test-team"
-            
-            # Launch with auto-resume and force=True (context exists)
-            success = team_launch_service.launch_team(
-                team_name="test-team",
-                context_name="test-team",
-                fresh=False,
-                force=True  # Need force=True when context already exists
-            )
-            
-            # Verify mixed resume behavior
-            register_calls = mock_orchestrator.register_agent.call_args_list
-            assert len(register_calls) == 3
-            
-            # Check the session IDs to verify behavior:
-            # Lead should resume with existing session ID
-            # Dev should get a new session ID (session_1) 
-            # QA should resume with existing session ID
-            session_ids = {call[0][0]: call[0][1] for call in register_calls}  # name: session_id
-            assert session_ids["Lead"] == "lead-session-123"
-            assert session_ids["Dev"] == "session_1"  # New session ID
-            assert session_ids["QA"] == "qa-session-789"
-            
-            # Note: The current implementation sets resume=True for all agents in existing context,
-            # even if they don't have a session_id. This could be considered a minor bug,
-            # but the actual behavior (creating new session) is correct due to the check in _register_agents
+        # Mock orchestrator with proper attributes
+        mock_orchestrator = Mock()
+        mock_agent = Mock()
+        mock_agent.pane_index = 0
+        mock_orchestrator.register_agent.return_value = mock_agent
+        mock_orchestrator.start.return_value = True
+        mock_orchestrator.running = False  # Don't enter infinite loop
+        mock_orchestrator.agents = {
+            "Lead": Mock(session_id="lead-session-123"),
+            "Dev": Mock(session_id=None),  # Will get new session
+            "QA": Mock(session_id="qa-session-789")
+        }
+        mock_orchestrator.tmux = Mock(session_name="test-team")
+        
+        # Set the mock orchestrator factory to return our configured mock
+        mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
+        mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
+        # Mock tmux attribute for the orchestrator
+        mock_orchestrator.tmux = Mock()
+        mock_orchestrator.tmux.session_name = "test-team"
+        
+        # Launch with auto-resume and force=True (context exists)
+        success = team_launch_service.launch_team(
+            team_name="test-team",
+            context_name="test-team",
+            fresh=False,
+            force=True  # Need force=True when context already exists
+        )
+        
+        # Verify mixed resume behavior
+        register_calls = mock_orchestrator.register_agent.call_args_list
+        assert len(register_calls) == 3
+        
+        # Verify session ID behavior
+        session_ids = {call[1]["name"]: call[1]["session_id"] for call in register_calls}
+        
+        # Lead should keep existing session ID
+        assert session_ids["Lead"] == "lead-session-123"
+        # QA should keep existing session ID  
+        assert session_ids["QA"] == "qa-session-789"
+        # Dev has no existing session ID, so gets None (fresh session will be created by Claude)
+        assert session_ids["Dev"] is None
+        
+        # Note: The current implementation sets resume=True for all agents in existing context,
+        # even if they don't have a session_id. This could be considered a minor bug,
+        # but the actual behavior (creating new session) is correct due to the check in _register_agents
     
     def test_missing_session_file_falls_back_to_new(
         self,
         team_launch_service, sample_team_config, existing_context_with_sessions,
         mock_dependencies
     ):
-        """Test that missing session files result in new sessions"""
+        """Test that existing session IDs are preserved (session file validation removed)"""
         # Mock the team loader instance in the service
         team_launch_service.team_loader = Mock()
         team_launch_service.team_loader.load_config.return_value = sample_team_config
@@ -300,45 +294,46 @@ class TestTeamLaunchResumeLogic:
         
         mock_dependencies['context_persistence'].get_context.return_value = existing_context_with_sessions
         
-        # Mock session file existence - all return False (files missing)
-        with patch.object(team_launch_service, '_session_file_exists') as mock_session_exists:
-            mock_session_exists.return_value = False  # No session files exist
-            
-            # Mock orchestrator with proper attributes
-            mock_orchestrator = Mock()
-            mock_agent = Mock()
-            mock_agent.pane_index = 0
-            mock_orchestrator.register_agent.return_value = mock_agent
-            mock_orchestrator.start.return_value = True
-            mock_orchestrator.running = False  # Don't enter infinite loop
-            mock_orchestrator.agents = {
-                "Lead": Mock(session_id="new-session-1"),
-                "Dev": Mock(session_id="new-session-2"),
-                "QA": Mock(session_id="new-session-3")
-            }
-            mock_orchestrator.tmux = Mock(session_name="test-team")
-            
-            # Set the mock orchestrator factory to return our configured mock
-            mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
-            mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
-            # Mock tmux attribute for the orchestrator
-            mock_orchestrator.tmux = Mock()
-            mock_orchestrator.tmux.session_name = "test-team"
-            
-            # Launch with auto-resume attempt and force=True (context exists)
-            success = team_launch_service.launch_team(
-                team_name="test-team",
-                context_name="test-team",
-                fresh=False,
-                force=True  # Need force=True when context already exists
-            )
-            
-            # All agents should get fresh sessions since files don't exist
-            register_calls = mock_orchestrator.register_agent.call_args_list
-            assert len(register_calls) == 3
-            
-            for call in register_calls:
-                assert call[1].get('session_id', "not-none") is None
+        # Session file validation removed - no longer performed
+        
+        # Mock orchestrator with proper attributes
+        mock_orchestrator = Mock()
+        mock_agent = Mock()
+        mock_agent.pane_index = 0
+        mock_orchestrator.register_agent.return_value = mock_agent
+        mock_orchestrator.start.return_value = True
+        mock_orchestrator.running = False  # Don't enter infinite loop
+        mock_orchestrator.agents = {
+            "Lead": Mock(session_id="lead-session-123"),
+            "Dev": Mock(session_id="dev-session-456"),
+            "QA": Mock(session_id="qa-session-789")
+        }
+        mock_orchestrator.tmux = Mock(session_name="test-team")
+        
+        # Set the mock orchestrator factory to return our configured mock
+        mock_dependencies['orchestrator_factory'].create_orchestrator.return_value = mock_orchestrator
+        mock_dependencies['orchestrator_factory'].create_configured_orchestrator.return_value = mock_orchestrator
+        # Mock tmux attribute for the orchestrator
+        mock_orchestrator.tmux = Mock()
+        mock_orchestrator.tmux.session_name = "test-team"
+        
+        # Launch with auto-resume attempt and force=True (context exists)
+        success = team_launch_service.launch_team(
+            team_name="test-team",
+            context_name="test-team",
+            fresh=False,
+            force=True  # Need force=True when context already exists
+        )
+        
+        # Since session file validation was removed, agents with session IDs in context keep them
+        register_calls = mock_orchestrator.register_agent.call_args_list
+        assert len(register_calls) == 3
+        
+        # Check that existing session IDs are preserved
+        session_ids = {call[1]["name"]: call[1]["session_id"] for call in register_calls}
+        assert session_ids["Lead"] == "lead-session-123"
+        assert session_ids["Dev"] == "dev-session-456"
+        assert session_ids["QA"] == "qa-session-789"
     
     def test_new_context_creates_fresh_sessions(
         self,
@@ -361,7 +356,11 @@ class TestTeamLaunchResumeLogic:
         mock_orchestrator.register_agent.return_value = mock_agent
         mock_orchestrator.start.return_value = True
         mock_orchestrator.running = False  # Don't enter infinite loop
-        mock_orchestrator.agents = {}  # Empty agents dict for new context
+        mock_orchestrator.agents = {
+            "Lead": Mock(session_id=None),
+            "Dev": Mock(session_id=None),
+            "QA": Mock(session_id=None)
+        }
         mock_orchestrator.tmux = Mock(session_name="test-team")
         
         # Set the mock orchestrator factory to return our configured mock

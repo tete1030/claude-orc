@@ -214,9 +214,10 @@ class ContextPersistenceService:
         for agent_data in import_data.get("agents", []):
             agents.append(TeamContextAgentInfo(
                 name=agent_data.get("name"),
-                container=agent_data.get("container"),
+                role=agent_data.get("role", "Agent"),
                 model=agent_data.get("model", "sonnet"),
-                pane_index=agent_data.get("pane_index", 0)
+                pane_index=agent_data.get("pane_index", 0),
+                session_id=agent_data.get("session_id")
             ))
         
         # Create context

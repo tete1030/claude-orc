@@ -164,7 +164,8 @@ class TestTmuxManager(unittest.TestCase):
                     pane_index=0,
                     agent_name="test-agent",
                     system_prompt="Test prompt",
-                    mcp_config=None
+                    mcp_config=None,
+                    session_id=None
                 )
                 
             # Test with working directory
@@ -186,7 +187,8 @@ class TestTmuxManager(unittest.TestCase):
                     pane_index=1,
                     agent_name="worker-agent",
                     system_prompt="Worker prompt",
-                    mcp_config=None
+                    mcp_config=None,
+                    session_id=None
                 )
     
     @patch('subprocess.run')

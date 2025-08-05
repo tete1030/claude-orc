@@ -50,7 +50,7 @@ class TestErrorHandling(unittest.TestCase):
         
     def test_send_message_unknown_agent_raises(self):
         """Test that send_message to unknown agent raises ValueError"""
-        self.orchestrator.register_agent("agent1", "session-1", "prompt")
+        self.orchestrator.register_agent("agent1", "session-1", "prompt", working_dir=None)
         
         cmd = Command(
             uuid="test",
@@ -157,7 +157,7 @@ class TestErrorHandling(unittest.TestCase):
         mock_tmux = MockTmuxHelper.create_mock_tmux(success=True, session_ids=[session_id])
         self.orchestrator.tmux = mock_tmux
         
-        self.orchestrator.register_agent("agent1", session_id, "prompt")
+        self.orchestrator.register_agent("agent1", session_id, "prompt", working_dir=None)
         self.orchestrator.start()
         
         # Let it run briefly - should not crash

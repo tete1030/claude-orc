@@ -311,13 +311,14 @@ The orchestrator supports automatic session persistence using Claude's built-in 
 
 #### Auto-Resume Decision Flow
 1. Check if agent has existing `session_id` in context
-2. Validate session file exists on disk
-3. If both true and not `--fresh`: Use `--resume <session_id>`
-4. Otherwise: Generate new session ID and start fresh
+2. If session ID exists and not `--fresh`: Use `--resume <session_id>`
+3. Otherwise: Generate new session ID and start fresh
 
 #### Key Components Modified
 - `TeamContextAgentInfo`: Added `session_id` field
-- `TeamLaunchService`: Added session validation and resume logic
+- `TeamLaunchService`: Added session resume logic
+
+**Note**: Session file validation is NOT performed. The system trusts Claude's built-in session management and does not verify session file existence before attempting resume.
 
 ### Testing Session Persistence
 ```bash

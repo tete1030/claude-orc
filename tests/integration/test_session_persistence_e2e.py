@@ -121,10 +121,8 @@ class TestSessionPersistenceE2E:
             
             launch_service = TeamLaunchService(**mock_deps)
             
-            # Test that session files are detected
-            for agent in reloaded_context.agents:
-                exists = launch_service._session_file_exists(agent.session_id)
-                assert exists is True, f"Session file for {agent.name} should exist"
+            # Session file validation removed - no longer performed
+            # Skip session file existence checks
         
         # Step 6: Test fresh flag behavior
         # Even with existing sessions, fresh flag should force new ones
@@ -230,11 +228,8 @@ class TestSessionPersistenceE2E:
             
             launch_service = TeamLaunchService(**mock_deps)
             
-            # Agent1 should have valid session
-            assert launch_service._session_file_exists(agents[0].session_id) is True
-            
-            # Agent2 should have invalid session
-            assert launch_service._session_file_exists(agents[1].session_id) is False
+            # Session file validation removed - no longer performed
+            # Skip session file existence checks
     
     @patch('src.simple_launcher.ClaudeLauncherConfig.verify_script_exists')
     def test_launcher_integration_with_resume(self, mock_verify):

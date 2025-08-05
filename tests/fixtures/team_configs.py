@@ -200,7 +200,7 @@ class MockFixtures:
                 self.agents = {}
                 self.tmux = MockTmux()
             
-            def register_agent(self, name, session_id, prompt):
+            def register_agent(self, name, session_id, prompt, working_dir=None):
                 agent = MockAgent(name, session_id, prompt)
                 self.agents[name] = agent
                 return agent

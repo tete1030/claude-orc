@@ -296,8 +296,8 @@ class TestE2EMockClaude(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("sender", "stress-sender", "Sender")
-        self.orchestrator.register_agent("receiver", "stress-receiver", "Receiver")
+        self.orchestrator.register_agent("sender", "stress-sender", "Sender", working_dir=None)
+        self.orchestrator.register_agent("receiver", "stress-receiver", "Receiver", working_dir=None)
         
         # Start orchestrator
         self.assertTrue(self.orchestrator.start())

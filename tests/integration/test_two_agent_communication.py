@@ -92,8 +92,8 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("master", "session-master", "You are the master agent")
-        self.orchestrator.register_agent("worker", "session-worker", "You are the worker agent")
+        self.orchestrator.register_agent("master", "session-master", "You are the master agent", working_dir=None)
+        self.orchestrator.register_agent("worker", "session-worker", "You are the worker agent", working_dir=None)
         
         # Create session files
         master_file = self.create_session_file("session-master")
@@ -131,8 +131,8 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("agent1", "session-1", "Agent 1")
-        self.orchestrator.register_agent("agent2", "session-2", "Agent 2")
+        self.orchestrator.register_agent("agent1", "session-1", "Agent 1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "Agent 2", working_dir=None)
         
         # Create session files
         agent1_file = self.create_session_file("session-1")
@@ -166,8 +166,8 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("receiver", "session-rcv", "Receiver")
-        self.orchestrator.register_agent("sender", "session-snd", "Sender")
+        self.orchestrator.register_agent("receiver", "session-rcv", "Receiver", working_dir=None)
+        self.orchestrator.register_agent("sender", "session-snd", "Sender", working_dir=None)
         
         # Create session files
         receiver_file = self.create_session_file("session-rcv")
@@ -212,9 +212,9 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register multiple agents
-        self.orchestrator.register_agent("agent1", "session-1", "Agent 1")
-        self.orchestrator.register_agent("agent2", "session-2", "Agent 2")
-        self.orchestrator.register_agent("agent3", "session-3", "Agent 3")
+        self.orchestrator.register_agent("agent1", "session-1", "Agent 1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "Agent 2", working_dir=None)
+        self.orchestrator.register_agent("agent3", "session-3", "Agent 3", working_dir=None)
         
         # Create session file for agent1
         agent1_file = self.create_session_file("session-1")
@@ -245,7 +245,7 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agent
-        self.orchestrator.register_agent("test_agent", "session-test", "Test agent")
+        self.orchestrator.register_agent("test_agent", "session-test", "Test agent", working_dir=None)
         
         # Create session file
         test_file = self.create_session_file("session-test")
@@ -275,8 +275,8 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("spammer", "session-spam", "Spammer")
-        self.orchestrator.register_agent("victim", "session-victim", "Victim")
+        self.orchestrator.register_agent("spammer", "session-spam", "Spammer", working_dir=None)
+        self.orchestrator.register_agent("victim", "session-victim", "Victim", working_dir=None)
         
         # Create session file
         spammer_file = self.create_session_file("session-spam")
@@ -314,8 +314,8 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agents
-        self.orchestrator.register_agent("alice", "session-alice", "Alice agent")
-        self.orchestrator.register_agent("bob", "session-bob", "Bob agent")
+        self.orchestrator.register_agent("alice", "session-alice", "Alice agent", working_dir=None)
+        self.orchestrator.register_agent("bob", "session-bob", "Bob agent", working_dir=None)
         
         # Create session files
         alice_file = self.create_session_file("session-alice")
@@ -369,7 +369,7 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register agent
-        self.orchestrator.register_agent("agent", "session-1", "Test agent")
+        self.orchestrator.register_agent("agent", "session-1", "Test agent", working_dir=None)
         
         # Start orchestrator
         self.assertTrue(self.orchestrator.start())
@@ -393,9 +393,9 @@ class TestTwoAgentCommunication(unittest.TestCase):
         mock_makedirs.return_value = None
         
         # Register three agents
-        self.orchestrator.register_agent("agent1", "session-1", "Agent 1")
-        self.orchestrator.register_agent("agent2", "session-2", "Agent 2")
-        self.orchestrator.register_agent("agent3", "session-3", "Agent 3")
+        self.orchestrator.register_agent("agent1", "session-1", "Agent 1", working_dir=None)
+        self.orchestrator.register_agent("agent2", "session-2", "Agent 2", working_dir=None)
+        self.orchestrator.register_agent("agent3", "session-3", "Agent 3", working_dir=None)
         
         # Create session files
         files = {
