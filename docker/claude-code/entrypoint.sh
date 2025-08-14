@@ -158,6 +158,8 @@ if [ "$CLAUDE_CONTAINER_MODE" = "shared" ] && [ "$CLAUDE_HOST_MOUNTED" = "false"
 fi
 
 if [ "$CLAUDE_HOST_MOUNTED" = "true" ]; then
+    chown "$USER_ID:$GROUP_ID" "$USER_HOME/.claude-host"
+
     # SAFETY CHECK: Ensure .claude is not already a symlink/mount from shared mode
     if [ -L "$USER_HOME/.claude" ] || mountpoint -q "$USER_HOME/.claude" 2>/dev/null; then
         echo "ERROR: .claude is a symlink or mountpoint in isolated mode - this is unsafe!"

@@ -449,7 +449,10 @@ class AgentStateMonitor:
                                 '[MESSAGE]',  # Message notifications
                                 'check_messages',  # Part of message notification
                                 'You have a new message',  # Message notification text
-                                'Reminder:'   # Idle reminder messages
+                                'Reminder:',   # Idle reminder messages
+                                '⎿',          # Continuation character
+                                'Tip:',       # Tip messages that appear after processing
+                                '/statusline' # Part of tip messages
                             ]
                             if line and not any(x in line for x in allowed_patterns):
                                 valid_busy = False
