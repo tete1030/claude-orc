@@ -86,6 +86,19 @@ except subprocess.CalledProcessError:
 **Solution**: Simplify patterns and handle edge cases
 **Key Learning**: Always capture and save real data for pattern testing
 
+### 7. BUSY State Detection with New Tip Messages (2025-08-14)
+
+**Problem**: Agents showing as IDLE when processing indicators were present
+**Root Cause**: New tip messages appearing after processing indicators (like "Tip:", "⎿", "/statusline") were not in the allowed_patterns, causing state detection issues
+**Debug Approach**:
+- Analyzed actual tmux pane content during busy states
+- Identified new tip message patterns that appear after processing
+- Tested pattern matching against real processing indicators
+
+**Solution**: Added 'Tip:', '⎿', and '/statusline' to allowed_patterns in `agent_state_monitor.py` to handle the new tip messages
+**Key Learning**: BUSY_PATTERNS should not be changed (marked DO NOT CHANGE), but allowed_patterns can be updated to handle new UI elements that appear alongside processing indicators. Line numbers only appear in tmux capture output for display, not in actual pane content.
+**Special Note**: Always check if patterns are marked as unchangeable before modifying them.
+
 ## Debug Methodology That Works
 
 ### 1. Single Comprehensive Test Script

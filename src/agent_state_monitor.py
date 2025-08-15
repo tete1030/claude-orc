@@ -439,24 +439,28 @@ class AgentStateMonitor:
                         # Allow only token count, interrupt messages, and message notifications
                         valid_busy = True
                         for check_idx in range(indicator_line + 1, prompt_box_top - 1):
-                            line = lines[check_idx].strip()
-                            # Allow expected lines between indicator and prompt box
-                            allowed_patterns = [
-                                'tokens',      # Token count
-                                'interrupt',   # Interrupt message
-                                '↓',          # Token arrow
-                                'esc',        # Escape message
-                                '[MESSAGE]',  # Message notifications
-                                'check_messages',  # Part of message notification
-                                'You have a new message',  # Message notification text
-                                'Reminder:',   # Idle reminder messages
-                                '⎿',          # Continuation character
-                                'Tip:',       # Tip messages that appear after processing
-                                '/statusline' # Part of tip messages
-                            ]
-                            if line and not any(x in line for x in allowed_patterns):
+                            # if lines[check_idx].startswith('  ⎿  '):
+                            if not lines[check_idx].startswith('  '):
                                 valid_busy = False
                                 break
+                            # line = lines[check_idx].strip()
+                            # # Allow expected lines between indicator and prompt box
+                            # allowed_patterns = [
+                            #     'tokens',      # Token count
+                            #     'interrupt',   # Interrupt message
+                            #     '↓',          # Token arrow
+                            #     'esc',        # Escape message
+                            #     '[MESSAGE]',  # Message notifications
+                            #     'check_messages',  # Part of message notification
+                            #     'You have a new message',  # Message notification text
+                            #     'Reminder:',   # Idle reminder messages
+                            #     '⎿',          # Continuation character
+                            #     'Tip:',       # Tip messages that appear after processing
+                            #     '/statusline' # Part of tip messages
+                            # ]
+                            # if line and not any(x in line for x in allowed_patterns):
+                            #     valid_busy = False
+                            #     break
                         
                         if valid_busy:
                             return AgentState.BUSY
