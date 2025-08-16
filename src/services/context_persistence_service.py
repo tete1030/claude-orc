@@ -21,6 +21,7 @@ class ContextDetails:
     agents: List[TeamContextAgentInfo]
     tmux_session: Optional[str]
     created_at: Optional[str]
+    working_dir: Optional[str]
     metadata: Dict[str, Any]
 
 
@@ -36,6 +37,7 @@ class ContextPersistenceService:
         context_name: str,
         agents: List[TeamContextAgentInfo],
         tmux_session: Optional[str] = None,
+        working_dir: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
@@ -45,6 +47,7 @@ class ContextPersistenceService:
             context_name: Name for the context
             agents: List of agents in the team
             tmux_session: Associated tmux session name
+            working_dir: Working directory where context was launched
             metadata: Additional metadata to store
             
         Returns:
@@ -54,7 +57,8 @@ class ContextPersistenceService:
             self.context_manager.create_context(
                 context_name=context_name,
                 agents=agents,
-                tmux_session=tmux_session
+                tmux_session=tmux_session,
+                working_dir=working_dir
             )
             
             # Store additional metadata if provided
@@ -96,20 +100,22 @@ class ContextPersistenceService:
                     agents.append(agent)
             tmux_session = team_context.get('tmux_session')
             created_at = team_context.get('created_at', '')
+            working_dir = team_context.get('working_dir')
             # Extract metadata
             metadata = {k: v for k, v in team_context.items() 
-                       if k not in ["context_name", "agents", "containers", "tmux_session", "created_at"]}
+                       if k not in ["context_name", "agents", "containers", "tmux_session", "created_at", "working_dir"]}
         else:
             # TeamContext object has attributes
             agents = team_context.agents if hasattr(team_context, 'agents') else []
             tmux_session = team_context.tmux_session if hasattr(team_context, 'tmux_session') else None
             created_at = team_context.created_at if hasattr(team_context, 'created_at') else ''
+            working_dir = team_context.working_dir if hasattr(team_context, 'working_dir') else None
             
             # Extract metadata from extra attributes
             metadata = {}
             if hasattr(team_context, '__dict__'):
                 for attr, value in team_context.__dict__.items():
-                    if attr not in ["context_name", "agents", "containers", "tmux_session", "created_at", "updated_at", "orchestrator_config"]:
+                    if attr not in ["context_name", "agents", "containers", "tmux_session", "created_at", "working_dir", "updated_at", "orchestrator_config"]:
                         metadata[attr] = value
         
         return ContextDetails(
@@ -117,6 +123,7 @@ class ContextPersistenceService:
             agents=agents,
             tmux_session=tmux_session,
             created_at=created_at,
+            working_dir=working_dir,
             metadata=metadata
         )
     

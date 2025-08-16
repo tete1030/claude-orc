@@ -120,7 +120,16 @@ orchestrator/
 
 ## Core Development Principles
 
-### 1. Fail-Fast Philosophy
+### 1. Fix Problems Properly, Don't Remove Features
+**When a problem is pointed out, fix the implementation, don't delete the feature**
+
+When the user points out an implementation problem (like "stupid field injection"):
+- **WRONG**: Remove the entire feature
+- **RIGHT**: Fix the implementation properly (e.g., add formal fields to dataclasses)
+- The user wants the feature to work correctly, not to be removed
+- Always choose the solution that maintains functionality while fixing the problem
+
+### 2. Fail-Fast Philosophy
 **Clear errors > silent failures**
 
 The codebase follows a strict "fail fast" philosophy:
@@ -134,19 +143,19 @@ The codebase follows a strict "fail fast" philosophy:
 - NEVER use `try-except-pass` or silent error handling
 - If data integrity is compromised (wrong types, missing required fields), raise exceptions immediately
 
-### 2. Research-First Development
+### 3. Research-First Development
 **Before writing code**:
 - Check if the codebase has similar patterns
 - Read relevant test files for usage examples
 - Test assumptions with minimal examples first
 
-### 3. Incremental Development
+### 4. Incremental Development
 - Start with minimal working example
 - Add features incrementally
 - Test each addition thoroughly
 - Document patterns that work
 
-### 4. NO HARDCODED DATA IN PRODUCTION CODE
+### 5. NO HARDCODED DATA IN PRODUCTION CODE
 **ABSOLUTELY FORBIDDEN**:
 - Hardcoded dates, paths, or configuration values
 - Mock data in production components (only tests should have mocks)

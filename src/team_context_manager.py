@@ -26,6 +26,7 @@ class TeamContextAgentInfo:
     model: str = "sonnet"
     pane_index: Optional[int] = None
     session_id: Optional[str] = None  # Claude Code session UUID for resuming
+    fork_history: List[Dict[str, str]] = field(default_factory=list)  # Track session fork history
     
     
 @dataclass 
@@ -35,6 +36,7 @@ class TeamContext:
     tmux_session: str  # Note: keeping tmux_session as it refers to actual tmux session
     created_at: str
     agents: List[TeamContextAgentInfo]
+    working_dir: Optional[str] = None  # Working directory where context was launched
     updated_at: Optional[str] = None
     orchestrator_config: Dict[str, Any] = field(default_factory=dict)
     
@@ -145,13 +147,15 @@ class TeamContextManager:
             return False
             
     def create_context(self, context_name: str, agents: List[TeamContextAgentInfo], 
-                      tmux_session: str, orchestrator_config: Optional[Dict] = None) -> TeamContext:
+                      tmux_session: str, working_dir: Optional[str] = None, 
+                      orchestrator_config: Optional[Dict] = None) -> TeamContext:
         """Create a new team context
         
         Args:
             context_name: Unique name for this team context
             agents: List of TeamContextAgentInfo objects defining the agents
             tmux_session: Name of the tmux session
+            working_dir: Working directory where context was launched
             orchestrator_config: Optional orchestrator configuration
             
         Returns:
@@ -169,6 +173,7 @@ class TeamContextManager:
             tmux_session=tmux_session,
             created_at=datetime.now().isoformat(),
             agents=agents,
+            working_dir=working_dir,
             orchestrator_config=orchestrator_config or {}
         )
         
@@ -296,3 +301,45 @@ class TeamContextManager:
         
         self._save_registry()
         return context
+    
+    def update_agent_session(self, context_name: str, agent_name: str, new_session_id: str) -> bool:
+        """Update agent's session ID when fork detected
+        
+        Args:
+            context_name: Name of the context
+            agent_name: Name of the agent
+            new_session_id: New session UUID to use
+            
+        Returns:
+            True if updated, False if context or agent not found
+        """
+        if context_name not in self.contexts:
+            self.logger.error(f"Context '{context_name}' not found")
+            return False
+            
+        context = self.contexts[context_name]
+        
+        for agent in context.agents:
+            if agent.name == agent_name:
+                old_session = agent.session_id
+                agent.session_id = new_session_id
+                
+                # Track fork history in the formal field
+                agent.fork_history.append({
+                    'from': old_session,
+                    'to': new_session_id,
+                    'detected_at': datetime.now().isoformat()
+                })
+                
+                # Update context timestamp
+                context.updated_at = datetime.now().isoformat()
+                self._save_registry()
+                
+                self.logger.warning(
+                    f"SESSION FORK: Updated {agent_name} in context '{context_name}': "
+                    f"{old_session} -> {new_session_id}"
+                )
+                return True
+                
+        self.logger.error(f"Agent '{agent_name}' not found in context '{context_name}'")
+        return False

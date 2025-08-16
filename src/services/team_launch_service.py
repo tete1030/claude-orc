@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any, Callable
 from src.team_config_loader import TeamConfigLoader
 from src.team_context_manager import TeamContextAgentInfo
 from src.mcp_central_server import CentralMCPServer
+from src.session_fork_monitor import SessionForkMonitor
 from .port_discovery_service import PortDiscoveryService
 from .orchestrator_factory import OrchestratorFactory, OrchestratorOptions
 from .mcp_server_manager import MCPServerManager
@@ -53,6 +54,8 @@ class TeamLaunchService:
         fresh: bool = False,
     ) -> bool:
         """Launch a team configuration"""
+        working_dir = None
+        
         # Load and validate team configuration
         team_config = self.team_loader.load_config(team_name)
         errors = self.team_loader.validate_config(team_config)
@@ -74,6 +77,23 @@ class TeamLaunchService:
             existing_context = self.context_persistence.get_context(context_name)
             if existing_context is not None:
                 print(f"Found existing context '{context_name}'")
+                
+                # Use stored working directory from context (unless fresh mode)
+                if not fresh and existing_context.working_dir:
+                    working_dir = existing_context.working_dir
+                    print(f"Using stored working directory: {working_dir}")
+                
+                # Check for session forks before resuming
+                if not fresh:
+                    self._check_session_forks(context_name)
+        
+        # If no working_dir from context (or fresh mode), use current directory
+        if working_dir is None:
+            working_dir = os.getcwd()
+            if fresh:
+                print(f"Fresh mode: Using current working directory: {working_dir}")
+            else:
+                print(f"New context: Using current working directory: {working_dir}")
         
         print(f"Launching team: {team_config.name}")
         print(f"Context: {context_name}")
@@ -115,7 +135,7 @@ class TeamLaunchService:
         self.mcp_server_manager.start_server(mcp_server, startup_delay=2.0)
         
         # Register agents with orchestrator
-        self._register_agents(team_config, agent_configs, orchestrator, task)
+        self._register_agents(team_config, agent_configs, orchestrator, task, working_dir)
         
         # Setup shutdown handling
         self._setup_shutdown_handling(
@@ -132,14 +152,16 @@ class TeamLaunchService:
                     context_name, 
                     team_config, 
                     agent_configs, 
-                    orchestrator
+                    orchestrator,
+                    working_dir
                 )
             else:
                 self._update_team_context(
                     context_name, 
                     team_config, 
                     agent_configs, 
-                    orchestrator
+                    orchestrator,
+                    working_dir
                 )
         
         # Start the orchestrator
@@ -149,6 +171,16 @@ class TeamLaunchService:
         # Update context with actual session IDs after launch
         if context_name:
             self._update_team_context_session_ids(context_name, orchestrator)
+        
+        # Start session fork monitoring
+        session_monitor = None
+        if context_name:
+            try:
+                session_monitor = SessionForkMonitor(self.context_persistence.context_manager)
+                session_monitor.start_monitoring(context_name)
+                self.logger.info(f"Started session fork monitoring for context '{context_name}'")
+            except Exception as e:
+                self.logger.warning(f"Failed to start session monitor: {e}")
         
         # Display launch status
         self._display_launch_status(team_config, agent_configs, mcp_port, debug, task, orchestrator)
@@ -160,6 +192,10 @@ class TeamLaunchService:
         except KeyboardInterrupt:
             print("\nShutting down...")
         finally:
+            # Stop session monitor if running
+            if session_monitor:
+                session_monitor.stop_monitoring()
+            
             # Cleanup
             self.signal_handler.trigger_shutdown()
             self.signal_handler.restore_signal_handlers()
@@ -225,7 +261,8 @@ class TeamLaunchService:
         team_config: Any,
         agent_configs: Dict[str, Dict[str, Any]],
         orchestrator: Any,
-        task: Optional[str]
+        task: Optional[str],
+        working_dir: Optional[str] = None
     ) -> None:
         """Register agents with the orchestrator"""
         for i, agent_config in enumerate(team_config.agents):
@@ -247,7 +284,7 @@ class TeamLaunchService:
                 name=agent_config.name, 
                 session_id=session_id,
                 system_prompt=prompt,
-                working_dir=None
+                working_dir=working_dir
             )
             
             # Update agent config with pane index for team context
@@ -296,7 +333,8 @@ class TeamLaunchService:
         context_name: str,
         team_config: Any,
         agent_configs: Dict[str, Dict[str, Any]],
-        orchestrator: Any
+        orchestrator: Any,
+        working_dir: Optional[str] = None
     ) -> None:
         """Register team context for persistence"""
         agents = []
@@ -317,6 +355,7 @@ class TeamLaunchService:
             context_name=context_name,
             agents=agents,
             tmux_session=tmux_session,
+            working_dir=working_dir,
             metadata={"team_name": team_config.name}
         )
         
@@ -327,7 +366,8 @@ class TeamLaunchService:
         context_name: str,
         team_config: Any,
         agent_configs: Dict[str, Dict[str, Any]],
-        orchestrator: Any
+        orchestrator: Any,
+        working_dir: Optional[str] = None
     ) -> None:
         """Update team context with actual session IDs after launch"""
         # Get current context
@@ -384,6 +424,40 @@ class TeamLaunchService:
                 agents=context.agents
             )
             self.logger.info(f"Team context '{context_name}' updated with session IDs")
+    
+    def _check_session_forks(self, context_name: str) -> Dict[str, str]:
+        """Check for session forks before resuming context
+        
+        Args:
+            context_name: Name of context to check
+            
+        Returns:
+            Dictionary of agent_name -> new_session_id for updated sessions
+        """
+        self.logger.info(f"Checking for session forks in context '{context_name}'...")
+        
+        try:
+            # Create session monitor
+            monitor = SessionForkMonitor(self.context_persistence.context_manager)
+            
+            # Check all agents for forks
+            updates = monitor.check_context_sessions(context_name)
+            
+            if updates:
+                print(f"\n⚠️  Session forks detected and updated:")
+                for agent_name, new_session in updates.items():
+                    print(f"  - {agent_name}: Updated to session {new_session}")
+                self.logger.warning(f"Updated {len(updates)} forked sessions: {updates}")
+            else:
+                self.logger.info("No session forks detected")
+                
+            return updates
+            
+        except Exception as e:
+            self.logger.error(f"Session fork check failed: {e}")
+            print(f"\n⚠️  Warning: Could not check for session forks: {e}")
+            print("  Continuing with stored session IDs...")
+            return {}
     
     def _display_launch_status(
         self,
