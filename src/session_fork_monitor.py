@@ -62,7 +62,8 @@ class SessionForkMonitor:
         
         # Build the expected session directory name for this agent
         # Pattern: ccbox-<context-name>-<agent-name>-<escaped-path>
-        session_dir_name = f"ccbox-{context_name}-{agent_name.replace(" ", "-").lower()}-{escaped_path}"
+        agent_name_sanitized = agent_name.lower().replace(" ", "-")
+        session_dir_name = f"ccbox-{context_name}-{agent_name_sanitized}-{escaped_path}"
         session_dir = host_base / session_dir_name
         
         if not session_dir.exists():
