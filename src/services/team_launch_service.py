@@ -73,29 +73,28 @@ class TeamLaunchService:
         
         # Check for existing context and load session IDs if resuming
         existing_context = None
-        if context_name:
+        if not fresh and context_name:
             existing_context = self.context_persistence.get_context(context_name)
-            if existing_context is not None:
-                print(f"Found existing context '{context_name}'")
-                
-                # Use stored working directory from context (unless fresh mode)
-                if not fresh and existing_context.working_dir:
-                    working_dir = existing_context.working_dir
-                    print(f"Using stored working directory: {working_dir}")
-                
-                # Check for session forks before resuming
-                if not fresh:
-                    self._check_session_forks(context_name)
+
+        if existing_context is not None:
+            print(f"Found existing context '{context_name}'")
+            
+            # Use stored working directory from context (unless fresh mode)
+            if existing_context.working_dir:
+                working_dir = existing_context.working_dir
+                print(f"Using stored working directory: {working_dir}")
+            else:
+                working_dir = os.getcwd()
+                print(f"Missing working directory in context '{context_name}': Using current working directory: {working_dir}")
+                self.context_persistence.update_context(context_name, metadata={"working_dir": working_dir})
+        
+            # Check for session forks before resuming
+            self._check_session_forks(context_name)
         
         # If no working_dir from context (or fresh mode), use current directory
         if working_dir is None:
             working_dir = os.getcwd()
-            if fresh:
-                print(f"Fresh mode: Using current working directory: {working_dir}")
-            else:
-                print(f"New context: Using current working directory: {working_dir}")
-            if existing_context:
-                self.context_persistence.update_context(context_name, metadata={"working_dir": working_dir})
+            print(f"Using working directory: {working_dir}")
         
         print(f"Launching team: {team_config.name}")
         print(f"Context: {context_name}")
