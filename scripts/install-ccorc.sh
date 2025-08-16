@@ -62,7 +62,13 @@ fi
 print_info "Installing ccorc..."
 
 # Install the package in editable mode with minimal dependencies
-python3 -m pip install -e . --user --quiet
+# Allow --user flag to be controlled by environment variable
+if [ "$INSTALL_USER" = "false" ]; then
+    python3 -m pip install -e . --quiet
+else
+    # System Python, use --user by default
+    python3 -m pip install -e . --user --quiet
+fi
 
 # Check if installation was successful
 if python3 -m pip show claude-orc &> /dev/null; then

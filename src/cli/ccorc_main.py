@@ -308,6 +308,25 @@ def print_context_details(context: ContextInfo):
 
 
 def main():
+    # Configure logging early to ensure consistent formatting
+    import logging
+    try:
+        from rich.logging import RichHandler
+        from rich.console import Console
+        
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(message)s",
+            datefmt="[%m/%d/%y %H:%M:%S]",
+            handlers=[RichHandler(console=Console(stderr=True), rich_tracebacks=True)]
+        )
+    except ImportError:
+        # Fallback to standard logging if Rich is not available
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    
     parser = argparse.ArgumentParser(description="Manage Claude orchestrator sessions")
     
     # Import command registry

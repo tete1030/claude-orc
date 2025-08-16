@@ -51,7 +51,7 @@ class SessionParser:
             
             # Check first few messages for session ID changes (fork indicator)
             prev_session_id = None
-            for i, line in enumerate(lines[:min(10, len(lines))]):
+            for i, line in enumerate(lines):
                 try:
                     msg = json.loads(line)
                     current_session_id = msg.get('sessionId')

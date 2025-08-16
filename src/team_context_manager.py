@@ -335,8 +335,8 @@ class TeamContextManager:
                 context.updated_at = datetime.now().isoformat()
                 self._save_registry()
                 
-                self.logger.warning(
-                    f"SESSION FORK: Updated {agent_name} in context '{context_name}': "
+                self.logger.info(
+                    f"Session fork: Updated {agent_name} in context '{context_name}': "
                     f"{old_session} -> {new_session_id}"
                 )
                 return True

@@ -68,8 +68,9 @@ class ConfigurableClaudeLauncher:
             # No special config, just use default
             return self._original_build(instance_name, session_id, system_prompt, resume, mcp_config_path)
         
-        # Build base command
-        base_cmd = self._original_build(instance_name, session_id, system_prompt, resume, mcp_config_path)
+        # Build base command - use instance_name from config if available (includes context prefix)
+        container_instance_name = agent_config.get("instance_name", instance_name)
+        base_cmd = self._original_build(container_instance_name, session_id, system_prompt, resume, mcp_config_path)
         
         # Build ccdk parameters that need to go BEFORE "run"
         ccdk_params = []

@@ -169,10 +169,11 @@ class Orchestrator:
                 except Exception as e:
                     self.logger.warning(f"Could not copy to shared location, using original: {e}")
                 
+                # MCP proxy always runs in container, use system Python
                 mcp_config = {
                     "mcpServers": {
                         "orchestrator": {
-                            "command": "python3",
+                            "command": "/usr/bin/python3",
                             "args": [proxy_path],
                             "env": {
                                 "AGENT_NAME": agent.name,

@@ -29,7 +29,7 @@ class SessionForkMonitor:
         """
         self.context_manager = context_manager
         self.parser = SessionParser()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.running = False
         self.monitor_thread = None
         self.check_interval = 30  # seconds
@@ -62,7 +62,7 @@ class SessionForkMonitor:
         
         # Build the expected session directory name for this agent
         # Pattern: ccbox-<context-name>-<agent-name>-<escaped-path>
-        session_dir_name = f"ccbox-{context_name}-{agent_name.lower()}-{escaped_path}"
+        session_dir_name = f"ccbox-{context_name}-{agent_name.replace(" ", "-").lower()}-{escaped_path}"
         session_dir = host_base / session_dir_name
         
         if not session_dir.exists():
@@ -113,14 +113,14 @@ class SessionForkMonitor:
             
             # If we encounter the stored session, it's still active
             if session_id == agent.session_id:
-                self.logger.info(f"Stored session {agent.session_id} is still most recent for {agent.name}")
+                self.logger.debug(f"Stored session {agent.session_id} is still most recent for {agent.name}")
                 return agent.session_id
                 
             # Check if this newer session is a descendant
             try:
                 if self.parser.verify_descendant(agent.session_id, session_file):
-                    self.logger.warning(
-                        f"FORK DETECTED: {agent.name} has descendant session {session_id} "
+                    self.logger.info(
+                        f"Fork detected: {agent.name} has descendant session {session_id} "
                         f"(forked from {agent.session_id})"
                     )
                     return session_id
@@ -165,8 +165,8 @@ class SessionForkMonitor:
                 if active_session and active_session != agent.session_id:
                     # Fork detected
                     old_session = agent.session_id
-                    self.logger.warning(
-                        f"SESSION FORK DETECTED: {agent.name} "
+                    self.logger.info(
+                        f"Session fork detected: {agent.name} "
                         f"{old_session} -> {active_session}"
                     )
                     

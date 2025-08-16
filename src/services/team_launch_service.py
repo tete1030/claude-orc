@@ -94,6 +94,8 @@ class TeamLaunchService:
                 print(f"Fresh mode: Using current working directory: {working_dir}")
             else:
                 print(f"New context: Using current working directory: {working_dir}")
+            if existing_context:
+                self.context_persistence.update_context(context_name, metadata={"working_dir": working_dir})
         
         print(f"Launching team: {team_config.name}")
         print(f"Context: {context_name}")
@@ -415,7 +417,7 @@ class TeamLaunchService:
                 if agent.session_id:
                     agent_info.session_id = agent.session_id
                     updated = True
-                    print(f"  Updated {agent_info.name} with session ID: {agent.session_id}")
+                    self.logger.info(f"Updated {agent_info.name} with session ID: {agent.session_id}")
         
         # Save updated context
         if updated:

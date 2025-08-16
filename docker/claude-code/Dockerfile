@@ -189,22 +189,23 @@ RUN chmod +x /usr/local/bin/claude-bg
 COPY bin/ccdk /usr/local/bin/ccdk
 RUN chmod +x /usr/local/bin/ccdk
 
-# Install minimal dependencies for ccorc
-# Only install what ccorc actually needs, not the full claude-orc package
-RUN pip install --no-cache-dir \
+# Install pip and dependencies for system Python
+RUN apt-get update && apt-get install -y python3-pip && \
+    /usr/bin/python3 -m pip install --no-cache-dir \
     pyyaml==6.0.2 \
     'mcp[cli]>=1.12.3' \
-    aiohttp>=3.8.0
+    aiohttp>=3.8.0 \
+    inotify-simple>=1.3.5 && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy ccorc and its dependencies directly to avoid full package installation
-# This avoids conflicts with /tmp/claude-orc mount and reduces image size
+# Copy ccorc source code
 COPY src /opt/ccorc/src/
 COPY examples /opt/ccorc/examples/
 
-# Create ccorc wrapper script that sets up Python path
+# Create simple ccorc wrapper using system Python
 RUN echo '#!/bin/bash' > /usr/local/bin/ccorc && \
-    echo 'export PYTHONPATH=/opt/ccorc:$PYTHONPATH' >> /usr/local/bin/ccorc && \
-    echo 'exec python3 /opt/ccorc/src/cli/ccorc_main.py "$@"' >> /usr/local/bin/ccorc && \
+    echo 'export PYTHONPATH="/opt/ccorc:${PYTHONPATH}"' >> /usr/local/bin/ccorc && \
+    echo 'exec /usr/bin/python3 /opt/ccorc/src/cli/ccorc_main.py "$@"' >> /usr/local/bin/ccorc && \
     chmod +x /usr/local/bin/ccorc
 
 # Copy entrypoint script
