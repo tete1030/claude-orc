@@ -86,13 +86,22 @@ def capture_snapshot(session_name="devops-team-demo"):
         last_lines = lines[-30:] if len(lines) > 30 else lines
         
         # Store pane data
+        # Check for actual processing indicator using the same pattern as AgentStateMonitor
+        import re
+        has_processing_indicator = False
+        for line in last_lines:
+            # Check if line has the busy pattern: spinner symbol + word + ellipsis
+            if re.search(r'[·✢✳✶✻✽*]\s+\w+…', line):
+                has_processing_indicator = True
+                break
+        
         snapshot["panes"][agent_name] = {
             "pane_index": i,
             "detected_state": state.value,
             "content_lines": len(lines),
             "last_30_lines": last_lines,
             "has_prompt_box": any('╭' in line and '╮' in line for line in last_lines),
-            "has_processing_indicator": any('…' in line for line in last_lines)
+            "has_processing_indicator": has_processing_indicator
         }
         
         print(f" [State: {state.value}]")

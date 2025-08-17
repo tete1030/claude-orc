@@ -265,12 +265,12 @@ class AgentStateMonitor:
     """Monitors agent states in tmux panes"""
     
     # Patterns to detect agent state
-    # IMPORTANT: DO NOT CHANGE THIS PATTERN! It works correctly as is.
-    # The pattern ^. matches any character at the start, which includes all spinner characters
+    # The busy indicator uses specific spinner symbols followed by a word and ellipsis
+    # Spinner symbols from Claude Code: ·, ✢, ✳, ✶, ✻, ✽, *
     BUSY_PATTERNS = [
-        # IMPORTANT: DO NOT CHANGE THIS PATTERN! It works correctly as is.
-        # The pattern ^. matches any character at the start, which includes all spinner characters
-        r"^.\s+(Accomplishing|Actioning|Actualizing|Analyzing|Baking|Booping|Brewing|Calculating|Cerebrating|Channelling|Churning|Clauding|Coalescing|Cogitating|Combobulating|Computing|Concocting|Conjuring|Considering|Contemplating|Cooking|Crafting|Creating|Crunching|Deciphering|Deliberating|Determining|Discombobulating|Divining|Doing|Effecting|Elucidating|Enchanting|Envisioning|Finagling|Flibbertigibbeting|Forging|Forming|Frolicking|Generating|Germinating|Hatching|Herding|Honking|Hustling|Ideating|Imagining|Incubating|Inferring|Jiving|Manifesting|Marinating|Meandering|Moseying|Mulling|Mustering|Musing|Noodling|Percolating|Perusing|Philosophising|Polishing|Pondering|Pontificating|Processing|Puttering|Puzzling|Reticulating|Reviewing|Ruminating|Scheming|Schlepping|Shimmying|Shucking|Simmering|Smooshing|Spelunking|Spinning|Stewing|Sussing|Synthesizing|Thinking|Tinkering|Transmuting|Unfurling|Unravelling|Vibing|Wandering|Whirring|Wibbling|Wizarding|Working|Wrangling)…",  # Processing indicator
+        # Match any spinner character followed by space, any word, and ellipsis
+        # This covers all processing states without needing to enumerate words
+        r"^[·✢✳✶✻✽*]\s+\w+…",  # Processing indicator with spinner symbols
     ]
     
     IDLE_PATTERNS = [
