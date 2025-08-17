@@ -12,7 +12,7 @@ import sys
 import time
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 # Import core modules - no more sys.path manipulation needed
 from src.team_context_manager import TeamContextManager
@@ -138,7 +138,7 @@ class SessionCLIManager:
                 running_containers=0,
             )
     
-    def health_check_context(self, context_name: str) -> Dict[str, any]:
+    def health_check_context(self, context_name: str) -> Dict[str, Any]:
         """Perform health check on session components"""
         context = self.get_context_details(context_name)
         if not context:
@@ -214,7 +214,7 @@ class SessionCLIManager:
             print(f"Error importing configuration from {config_file}")
         return result
     
-    def list_teams(self) -> List[Dict[str, any]]:
+    def list_teams(self) -> List[Dict[str, Any]]:
         """List all available team configurations"""
         teams = []
         
@@ -249,12 +249,12 @@ class SessionCLIManager:
     def launch_team(
         self,
         team_name: str,
-        context_name: str = None,
-        model_override: str = None,
-        agent_model_overrides: dict = None,
+        context_name: Optional[str] = None,
+        model_override: Optional[str] = None,
+        agent_model_overrides: Optional[dict] = None,
         force: bool = False,
         debug: bool = False,
-        task: str = None,
+        task: Optional[str] = None,
         auto_cleanup: bool = False,
         fresh: bool = False,
     ) -> bool:
@@ -276,10 +276,47 @@ class SessionCLIManager:
             auto_cleanup=auto_cleanup,
             fresh=fresh,
         )
+    
+    def resume_team(
+        self,
+        context_name: str,
+        force: bool = False,
+        check_forks: bool = True,
+        fresh_sessions: bool = False,
+        model_override: Optional[str] = None,
+        agent_model_overrides: Optional[dict] = None,
+        debug: bool = False,
+        task: Optional[str] = None,
+        auto_cleanup: bool = False,
+    ) -> bool:
+        """Resume an existing team context"""
+        # Get context details
+        context = self.context_persistence.get_context(context_name)
+        if not context:
+            raise ValueError(f"Context '{context_name}' not found")
+        
+        # Get team name from metadata
+        team_name = context.metadata.get("team_name")
+        if not team_name:
+            raise ValueError(f"Context '{context_name}' has no associated team")
+        
+        # Resume using the team launch service
+        # The fresh parameter controls whether to use stored sessions
+        return self.team_launch.launch_team(
+            team_name=team_name,
+            context_name=context_name,
+            model_override=model_override,
+            agent_model_overrides=agent_model_overrides,
+            force=force,
+            debug=debug,
+            task=task,
+            auto_cleanup=auto_cleanup,
+            fresh=fresh_sessions,
+        )
 
 
 # Utility functions kept for backward compatibility
-def print_teams_table(teams: List[Dict[str, any]]):
+def print_teams_table(teams: List[Dict[str, Any]]):
     """Print teams in a formatted table"""
     from src.cli.teams_command import TeamsListSubcommand
     cmd = TeamsListSubcommand()

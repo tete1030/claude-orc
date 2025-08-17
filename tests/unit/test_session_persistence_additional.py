@@ -105,7 +105,7 @@ class TestContextPersistenceErrorHandling:
                 tmux_session="recovery"
             )
             assert context is not None
-            assert context.name == "recovery-test"
+            assert context.context_name == "recovery-test"
     
     def test_partial_json_recovery(self):
         """Test recovery from partially written JSON"""
@@ -125,48 +125,52 @@ class TestContextPersistenceErrorHandling:
     
     def test_context_update_with_invalid_field(self):
         """Test updating context with invalid fields"""
-        manager = TeamContextManager()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "test_contexts.json"
+            manager = TeamContextManager(registry_path=str(registry_path))
         
-        # Create context
-        context = manager.create_context(
-            "test-context",
-            agents=[],
-            tmux_session="test"
-        )
-        
-        # Try to update with invalid field - should be ignored
-        result = manager.update_context(
-            "test-context",
-            invalid_field="should_be_ignored",
-            metadata={"valid": "data"}
-        )
-        
-        # Valid field should be updated
-        assert result is not None
-        assert result.metadata == {"valid": "data"}
+            # Create context
+            context = manager.create_context(
+                "test-context",
+                agents=[],
+                tmux_session="test"
+            )
+            
+            # Try to update with invalid field - should be ignored
+            result = manager.update_context(
+                "test-context",
+                invalid_field="should_be_ignored",
+                orchestrator_config={"valid": "data"}
+            )
+            
+            # Valid field should be updated
+            assert result is not None
+            assert result.orchestrator_config == {"valid": "data"}
         
         # Invalid field should not exist
         assert not hasattr(result, 'invalid_field')
     
     def test_missing_context_operations(self):
         """Test operations on non-existent contexts"""
-        manager = TeamContextManager()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "test_contexts.json"
+            manager = TeamContextManager(registry_path=str(registry_path))
         
-        # Get non-existent context
-        context = manager.get_context("does-not-exist")
-        assert context is None
-        
-        # Update non-existent context
-        result = manager.update_context("does-not-exist", metadata={"test": "data"})
-        assert result is None
-        
-        # Delete non-existent context
-        result = manager.delete_context("does-not-exist")
-        assert result is False
-        
-        # Resume non-existent context
-        result = manager.resume_context("does-not-exist")
-        assert result is None
+            # Get non-existent context
+            context = manager.get_context("does-not-exist")
+            assert context is None
+            
+            # Update non-existent context
+            result = manager.update_context("does-not-exist", orchestrator_config={"test": "data"})
+            assert result is None
+            
+            # Delete non-existent context
+            result = manager.delete_context("does-not-exist")
+            assert result is False
+            
+            # Resume non-existent context should raise ValueError
+            with pytest.raises(ValueError, match="not found"):
+                manager.resume_context("does-not-exist")
 
 
 class TestSessionPersistenceIntegration:
@@ -256,10 +260,10 @@ class TestSessionPersistenceIntegration:
                 tmux_session="meta"
             )
             
-            # Update with metadata
+            # Update with orchestrator_config
             manager.update_context(
                 "metadata-test",
-                metadata={
+                orchestrator_config={
                     "task": "testing",
                     "priority": "high",
                     "custom_data": {"nested": "value"}
@@ -270,9 +274,9 @@ class TestSessionPersistenceIntegration:
             new_manager = TeamContextManager(registry_path=str(registry_path))
             loaded = new_manager.get_context("metadata-test")
             
-            assert loaded.metadata["task"] == "testing"
-            assert loaded.metadata["priority"] == "high"
-            assert loaded.metadata["custom_data"]["nested"] == "value"
+            assert loaded.orchestrator_config["task"] == "testing"
+            assert loaded.orchestrator_config["priority"] == "high"
+            assert loaded.orchestrator_config["custom_data"]["nested"] == "value"
     
     def test_export_import_with_session_ids(self):
         """Test export/import functionality preserves session IDs"""
@@ -282,17 +286,18 @@ class TestSessionPersistenceIntegration:
         mock_manager = Mock()
         service.context_manager = mock_manager
         
-        # Mock get_context for export
-        mock_manager.get_context.return_value = {
-            "name": "export-test",
-            "agents": [
+        # Mock get_context for export - use proper TeamContext object
+        from tests.unit.mock_helpers import create_mock_team_context
+        mock_manager.get_context.return_value = create_mock_team_context(
+            context_name="export-test",
+            agents=[
                 {"name": "A1", "role": "R1", "model": "sonnet", "pane_index": 0, "session_id": "export-session-1"},
                 {"name": "A2", "role": "R2", "model": "sonnet", "pane_index": 1, "session_id": "export-session-2"},
             ],
-            "tmux_session": "export",
-            "created_at": "2024-01-01T00:00:00",
-            "metadata": {"exported": True}
-        }
+            tmux_session="export",
+            created_at="2024-01-01T00:00:00",
+            exported=True  # This will go in orchestrator_config
+        )
         
         # Export
         export_data = service.export_context("export-test")
@@ -321,71 +326,77 @@ class TestSessionPersistenceBoundaryConditions:
     
     def test_maximum_agents_per_context(self):
         """Test handling of many agents in a context"""
-        manager = TeamContextManager()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "test_contexts.json"
+            manager = TeamContextManager(registry_path=str(registry_path))
         
-        # Create context with 50 agents
-        agents = []
-        for i in range(50):
-            agent = TeamContextAgentInfo(
-                name=f"Agent{i}",
-                role=f"Role{i}",
-                model="sonnet",
-                pane_index=i,
-                session_id=f"session-{i:03d}" if i % 2 == 0 else None  # Half have sessions
+            # Create context with 50 agents
+            agents = []
+            for i in range(50):
+                agent = TeamContextAgentInfo(
+                    name=f"Agent{i}",
+                    role=f"Role{i}",
+                    model="sonnet",
+                    pane_index=i,
+                    session_id=f"session-{i:03d}" if i % 2 == 0 else None  # Half have sessions
+                )
+                agents.append(agent)
+            
+            context = manager.create_context(
+                "large-context",
+                agents=agents,
+                tmux_session="large"
             )
-            agents.append(agent)
-        
-        context = manager.create_context(
-            "large-context",
-            agents=agents,
-            tmux_session="large"
-        )
-        
-        assert len(context.agents) == 50
-        
-        # Count agents with sessions
-        with_sessions = sum(1 for a in context.agents if a.session_id is not None)
-        assert with_sessions == 25
+            
+            assert len(context.agents) == 50
+            
+            # Count agents with sessions
+            with_sessions = sum(1 for a in context.agents if a.session_id is not None)
+            assert with_sessions == 25
     
     def test_concurrent_context_updates(self):
         """Test concurrent updates don't corrupt data"""
         import threading
         
-        manager = TeamContextManager()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "test_contexts.json"
+            manager = TeamContextManager(registry_path=str(registry_path))
         
-        # Create initial context
-        context = manager.create_context(
-            "concurrent-test",
-            agents=[],
-            tmux_session="concurrent"
-        )
-        
-        # Function to update metadata
-        def update_metadata(key, value):
-            for _ in range(10):
-                manager.update_context(
-                    "concurrent-test",
-                    metadata={key: value}
-                )
-        
-        # Launch concurrent updates
-        threads = []
-        for i in range(5):
-            t = threading.Thread(
-                target=update_metadata,
-                args=(f"key{i}", f"value{i}")
+            # Create initial context
+            context = manager.create_context(
+                "concurrent-test",
+                agents=[],
+                tmux_session="concurrent"
             )
-            threads.append(t)
-            t.start()
         
-        # Wait for completion
-        for t in threads:
-            t.join()
-        
-        # Context should still be valid
-        final = manager.get_context("concurrent-test")
-        assert final is not None
-        assert "key0" in final.metadata or "key1" in final.metadata  # At least some updates succeeded
+            # Function to update orchestrator_config
+            def update_metadata(key, value):
+                for _ in range(10):
+                    manager.update_context(
+                        "concurrent-test",
+                        orchestrator_config={key: value}
+                    )
+            
+            # Launch concurrent updates
+            threads = []
+            for i in range(5):
+                t = threading.Thread(
+                    target=update_metadata,
+                    args=(f"key_{i}", f"value_{i}")
+                )
+                threads.append(t)
+                t.start()
+            
+            # Wait for completion
+            for t in threads:
+                t.join()
+            
+            # Context should still be valid
+            final = manager.get_context("concurrent-test")
+            assert final is not None
+            # Check at least one update succeeded (concurrent updates may overwrite each other)
+            # This is expected behavior - last write wins
+            assert len(final.orchestrator_config) > 0
     
     def test_registry_size_limits(self):
         """Test behavior with large registry files"""

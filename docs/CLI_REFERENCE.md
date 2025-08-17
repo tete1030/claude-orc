@@ -11,9 +11,11 @@ ccorc <command> [target] [options]
 
 ### Commands
 
-#### `launch` - Launch a team configuration
+#### `launch` - Create new team context
 ```bash
 ccorc launch <team> [context-name] [options]
+
+Creates a new team context with fresh sessions. Will fail if context already exists.
 
 Positional Arguments:
   team              Team configuration name (required)
@@ -21,19 +23,39 @@ Positional Arguments:
 
 Options:
   -m, --model       Override all agents' models
-  -f, --force       Force kill existing session if it exists
   -d, --debug       Enable debug mode
   -t, --task        Initial task for the team
   --rm              Automatic context cleanup on exit
-  -F, --fresh       Force new sessions, ignore existing session IDs
   --agent-model     Override specific agent model (format: Agent=model)
 
 Examples:
-  ccorc launch devops-team
-  ccorc launch devops-team my-project --rm
-  ccorc launch security-team -t "Audit the codebase"
-  ccorc launch data-team -m opus -d -F
-  ccorc launch devops-team prod -f -t "Deploy v2.0"
+  ccorc launch devops-team                        # Create new context 'devops-team'
+  ccorc launch devops-team my-project --rm        # Create with auto-cleanup
+  ccorc launch security-team -t "Audit the codebase"  # Create with initial task
+  ccorc launch data-team -m opus -d               # Create with model override and debug
+```
+
+#### `resume` - Resume existing team context
+```bash
+ccorc resume <context-name> [options]
+
+Resumes an existing team context, reconnecting to previous sessions where possible.
+
+Positional Arguments:
+  context-name      Existing context name (required)
+
+Options:
+  -m, --model       Override all agents' models (for new sessions only)
+  -d, --debug       Enable debug mode
+  -t, --task        Additional task for the team
+  -f, --force       Force restart if sessions are problematic
+  --agent-model     Override specific agent model (format: Agent=model)
+
+Examples:
+  ccorc resume devops-team                        # Resume existing context
+  ccorc resume my-project -d                      # Resume with debug mode
+  ccorc resume security-team -t "Continue audit"  # Resume with additional task
+  ccorc resume data-team -f                       # Force restart problematic sessions
 ```
 
 #### `ls` / `list` - List all team contexts
@@ -242,19 +264,25 @@ Examples:
 
 ## Common Usage Patterns
 
-### Quick Team Launch
+### Team Lifecycle Management
 ```bash
-# Simple launch
+# Create new team context
 ccorc launch devops-team
 
-# With task and debug
-ccorc launch devops-team -t "Build auth system" -d
+# Create with specific context name and task
+ccorc launch devops-team auth-project -t "Build auth system" -d
 
-# Fresh start with model override
-ccorc launch security-team -m opus -F
+# Create with model override and auto-cleanup
+ccorc launch security-team -m opus --rm
 
-# Full options (with auto-cleanup)
-ccorc launch data-team analytics -m sonnet -f -d -t "Process Q4 data" --rm -F
+# Resume existing context
+ccorc resume devops-team
+
+# Resume with additional task
+ccorc resume auth-project -t "Continue with testing"
+
+# Force restart if sessions have issues
+ccorc resume data-team -f
 ```
 
 ### Container Management

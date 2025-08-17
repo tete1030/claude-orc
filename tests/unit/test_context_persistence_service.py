@@ -10,6 +10,7 @@ from datetime import datetime
 
 from src.services.context_persistence_service import ContextPersistenceService
 from src.team_context_manager import TeamContextAgentInfo
+from tests.unit.mock_helpers import create_mock_team_context
 
 
 class TestContextPersistenceService:
@@ -43,7 +44,8 @@ class TestContextPersistenceService:
         self.mock_manager.create_context.assert_called_once_with(
             context_name="test-context",
             agents=self.agents,
-            tmux_session="test-session"
+            tmux_session="test-session",
+            working_dir=None
         )
     
     def test_create_context_failure(self):
@@ -55,14 +57,16 @@ class TestContextPersistenceService:
     
     def test_get_context_exists(self):
         """Test getting existing context"""
-        self.mock_manager.get_context.return_value = {
-            "agents": [
+        # Use proper TeamContext object instead of dict
+        self.mock_manager.get_context.return_value = create_mock_team_context(
+            context_name="test-context",
+            agents=[
                 {"name": "Lead", "role": "Team Lead", "model": "opus", "pane_index": 0, "session_id": "lead-session-123"}
             ],
-            "tmux_session": "test-session",
-            "created_at": "2024-01-01T00:00:00",
-            "custom_field": "value"
-        }
+            tmux_session="test-session",
+            created_at="2024-01-01T00:00:00",
+            custom_field="value"  # Extra field goes to metadata
+        )
         
         context = self.service.get_context("test-context")
         
@@ -87,18 +91,20 @@ class TestContextPersistenceService:
             "context2": {}
         }
         
-        # Mock get_context to return details
+        # Mock get_context to return proper TeamContext objects
         def mock_get_context(name):
             if name == "context1":
-                return {
-                    "agents": [],
-                    "tmux_session": "session1"
-                }
+                return create_mock_team_context(
+                    context_name="context1",
+                    agents=[],
+                    tmux_session="session1"
+                )
             elif name == "context2":
-                return {
-                    "agents": [],
-                    "tmux_session": "session2"
-                }
+                return create_mock_team_context(
+                    context_name="context2",
+                    agents=[],
+                    tmux_session="session2"
+                )
             return None
         
         self.mock_manager.get_context.side_effect = mock_get_context
@@ -129,14 +135,15 @@ class TestContextPersistenceService:
     
     def test_export_context(self):
         """Test exporting context"""
-        # Set up mock context
-        self.mock_manager.get_context.return_value = {
-            "agents": [
+        # Set up mock context with proper TeamContext
+        self.mock_manager.get_context.return_value = create_mock_team_context(
+            context_name="test-context",
+            agents=[
                 {"name": "Lead", "role": "Team Lead", "model": "opus", "pane_index": 0, "session_id": "lead-session-123"}
             ],
-            "tmux_session": "test-session",
-            "created_at": "2024-01-01T00:00:00"
-        }
+            tmux_session="test-session",
+            created_at="2024-01-01T00:00:00"
+        )
         
         export_data = self.service.export_context("test-context")
         
@@ -179,7 +186,12 @@ class TestContextPersistenceService:
         """Test importing context that already exists"""
         import_data = {"context_name": "existing-context"}
         
-        self.mock_manager.get_context.return_value = {"exists": True}
+        # Use proper TeamContext object
+        self.mock_manager.get_context.return_value = create_mock_team_context(
+            context_name="existing-context",
+            agents=[],
+            tmux_session="existing-session"
+        )
         
         result = self.service.import_context(import_data, skip_existing=True)
         
@@ -188,10 +200,11 @@ class TestContextPersistenceService:
     
     def test_save_to_file(self):
         """Test saving context to file"""
-        self.mock_manager.get_context.return_value = {
-            "agents": [],
-            "tmux_session": "test-session"
-        }
+        self.mock_manager.get_context.return_value = create_mock_team_context(
+            context_name="test-context",
+            agents=[],
+            tmux_session="test-session"
+        )
         
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = f"{tmpdir}/test-context.json"
@@ -249,8 +262,9 @@ class TestContextPersistenceService:
         # Check that update_context was called with the right parameters
         self.mock_manager.update_context.assert_called_once()
         call_args = self.mock_manager.update_context.call_args[1]
-        assert "to_update" in call_args
-        assert "additional" in call_args
+        assert "orchestrator_config" in call_args
+        assert call_args["orchestrator_config"]["to_update"] == "new"
+        assert call_args["orchestrator_config"]["additional"] == "data"
     
     def test_update_context_metadata_replace(self):
         """Test updating context metadata with replace"""
@@ -271,7 +285,8 @@ class TestContextPersistenceService:
         # Check that update_context was called
         self.mock_manager.update_context.assert_called_once()
         call_args = self.mock_manager.update_context.call_args[1]
-        assert "new_metadata" in call_args
+        assert "orchestrator_config" in call_args
+        assert call_args["orchestrator_config"]["new_metadata"] == "keep_me"
 
 
 if __name__ == "__main__":

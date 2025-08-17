@@ -87,44 +87,14 @@ class ContextPersistenceService:
         if not team_context:
             return None
         
-        # Handle both dict and TeamContext object
-        if isinstance(team_context, dict):
-            # Legacy dict format
-            agents_data = team_context.get('agents', [])
-            # Convert agent dicts to TeamContextAgentInfo objects
-            agents = []
-            for agent in agents_data:
-                if isinstance(agent, dict):
-                    agents.append(TeamContextAgentInfo(**agent))
-                else:
-                    agents.append(agent)
-            tmux_session = team_context.get('tmux_session')
-            created_at = team_context.get('created_at', '')
-            working_dir = team_context.get('working_dir')
-            # Extract metadata
-            metadata = {k: v for k, v in team_context.items() 
-                       if k not in ["context_name", "agents", "containers", "tmux_session", "created_at", "working_dir"]}
-        else:
-            # TeamContext object has attributes
-            agents = team_context.agents if hasattr(team_context, 'agents') else []
-            tmux_session = team_context.tmux_session if hasattr(team_context, 'tmux_session') else None
-            created_at = team_context.created_at if hasattr(team_context, 'created_at') else ''
-            working_dir = team_context.working_dir if hasattr(team_context, 'working_dir') else None
-            
-            # Extract metadata from extra attributes
-            metadata = {}
-            if hasattr(team_context, '__dict__'):
-                for attr, value in team_context.__dict__.items():
-                    if attr not in ["context_name", "agents", "containers", "tmux_session", "created_at", "working_dir", "updated_at", "orchestrator_config"]:
-                        metadata[attr] = value
-        
+        # TeamContext is always a dataclass from TeamContextManager
         return ContextDetails(
             name=context_name,
-            agents=agents,
-            tmux_session=tmux_session,
-            created_at=created_at,
-            working_dir=working_dir,
-            metadata=metadata
+            agents=team_context.agents,
+            tmux_session=team_context.tmux_session,
+            created_at=team_context.created_at,
+            working_dir=team_context.working_dir,
+            metadata=team_context.orchestrator_config or {}
         )
     
     def list_contexts(self) -> Dict[str, ContextDetails]:
@@ -181,7 +151,7 @@ class ContextPersistenceService:
             "export_date": datetime.now().isoformat(),
             "tmux_session": context.tmux_session,
             "created_at": context.created_at,
-            "agents": [asdict(agent) if hasattr(agent, '__dataclass_fields__') else agent for agent in context.agents],
+            "agents": [asdict(agent) for agent in context.agents],
             "metadata": context.metadata
         }
         
@@ -354,8 +324,8 @@ class ContextPersistenceService:
             True if updated successfully
         """
         try:
-            # Use the update_context method with metadata
-            updated_context = self.context_manager.update_context(context_name, **metadata)
+            # Use the update_context method with metadata as orchestrator_config
+            updated_context = self.context_manager.update_context(context_name, orchestrator_config=metadata)
             
             if updated_context:
                 self.logger.info(f"Updated metadata for context '{context_name}'")

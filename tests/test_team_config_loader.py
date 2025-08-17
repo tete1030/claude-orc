@@ -10,7 +10,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from team_config_loader import TeamConfigLoader, TeamConfig, Agent
+from team_config_loader import TeamConfigLoader, TeamConfig, AgentConfig
 
 
 class TestTeamConfigLoader:
@@ -44,8 +44,10 @@ class TestTeamConfigLoader:
     
     def test_find_config_file_with_json(self, tmp_path):
         """Test finding JSON config file."""
-        # Create test config file
-        config_file = tmp_path / "test-config.json"
+        # Create test config directory and file (expected structure: config_name/team.json)
+        config_dir = tmp_path / "test-config"
+        config_dir.mkdir()
+        config_file = config_dir / "team.json"
         config_file.write_text("{}")
         
         loader = TeamConfigLoader(search_paths=[tmp_path])
@@ -100,8 +102,8 @@ class TestTeamConfigLoader:
     
     def test_load_config_complete(self, tmp_path):
         """Test loading a complete configuration."""
-        # Create config directory
-        config_dir = tmp_path / "teams"
+        # Create config directory (expected structure: search_path/devops/team.json)
+        config_dir = tmp_path / "devops"
         config_dir.mkdir()
         
         # Create config file
@@ -126,7 +128,7 @@ class TestTeamConfigLoader:
             }
         }
         
-        config_file = config_dir / "devops.json"
+        config_file = config_dir / "team.json"
         config_file.write_text(json.dumps(config_data, indent=2))
         
         # Create prompt file
@@ -135,7 +137,7 @@ class TestTeamConfigLoader:
         
         # Load config
         loader = TeamConfigLoader(search_paths=[tmp_path])
-        team_config = loader.load_config("teams/devops")
+        team_config = loader.load_config("devops")
         
         assert team_config.name == "DevOps Team"
         assert team_config.description == "Development team"
@@ -157,8 +159,10 @@ class TestTeamConfigLoader:
     
     def test_load_config_missing_team_section(self, tmp_path):
         """Test loading config without team section."""
+        config_dir = tmp_path / "bad"
+        config_dir.mkdir()
         config_data = {"agents": []}
-        config_file = tmp_path / "bad.json"
+        config_file = config_dir / "team.json"
         config_file.write_text(json.dumps(config_data))
         
         loader = TeamConfigLoader(search_paths=[tmp_path])
@@ -168,11 +172,13 @@ class TestTeamConfigLoader:
     
     def test_load_config_no_agents(self, tmp_path):
         """Test loading config without agents."""
+        config_dir = tmp_path / "empty"
+        config_dir.mkdir()
         config_data = {
             "team": {"name": "Empty Team"},
             "agents": []
         }
-        config_file = tmp_path / "empty.json"
+        config_file = config_dir / "team.json"
         config_file.write_text(json.dumps(config_data))
         
         loader = TeamConfigLoader(search_paths=[tmp_path])
@@ -186,7 +192,7 @@ class TestTeamConfigLoader:
             name="Test Team",
             description="Test",
             agents=[
-                Agent(name="Agent1", role="Role1")
+                AgentConfig(name="Agent1", role="Role1")
             ],
             settings={"orchestrator_type": "enhanced"}
         )
@@ -213,7 +219,7 @@ class TestTeamConfigLoader:
         config = TeamConfig(
             name="Test",
             description="Test",
-            agents=[Agent(name="A", role="R")],
+            agents=[AgentConfig(name="A", role="R")],
             settings={"orchestrator_type": "invalid"}
         )
         errors = loader.validate_config(config)
@@ -224,8 +230,8 @@ class TestTeamConfigLoader:
             name="Test",
             description="Test",
             agents=[
-                Agent(name="Agent", role="Role1"),
-                Agent(name="Agent", role="Role2")
+                AgentConfig(name="Agent", role="Role1"),
+                AgentConfig(name="Agent", role="Role2")
             ]
         )
         errors = loader.validate_config(config)
@@ -237,8 +243,8 @@ class TestTeamConfigLoader:
             name="Test",
             description="Test",
             agents=[
-                Agent(name="Architect", role="Lead"),
-                Agent(name="Developer", role="Engineer")
+                AgentConfig(name="Architect", role="Lead"),
+                AgentConfig(name="Developer", role="Engineer")
             ]
         )
         

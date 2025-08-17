@@ -10,11 +10,7 @@ from unittest.mock import Mock, patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import ccorc components
-import importlib.util
-ccorc_path = Path(__file__).parent.parent.parent / "bin" / "ccorc"
-spec = importlib.util.spec_from_file_location("ccorc", str(ccorc_path))
-ccorc_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ccorc_module)
+from src.cli.ccorc_main import SessionCLIManager
 
 
 class TestRefactoredCcorc:
@@ -22,7 +18,7 @@ class TestRefactoredCcorc:
     
     def test_session_cli_manager_has_services(self):
         """Test that SessionCLIManager initializes services"""
-        manager = ccorc_module.SessionCLIManager()
+        manager = SessionCLIManager()
         
         # Verify services are initialized
         assert hasattr(manager, 'port_service')
@@ -40,7 +36,7 @@ class TestRefactoredCcorc:
     
     def test_removed_methods_not_present(self):
         """Test that old methods were removed"""
-        manager = ccorc_module.SessionCLIManager()
+        manager = SessionCLIManager()
         
         # These methods should no longer exist
         assert not hasattr(manager, '_find_available_port')
@@ -79,7 +75,7 @@ class TestRefactoredCcorc:
         mock_factory.create_configured_orchestrator = Mock(return_value=mock_orchestrator)
         
         # Create manager with mocked factory
-        manager = ccorc_module.SessionCLIManager()
+        manager = SessionCLIManager()
         manager.orchestrator_factory = mock_factory
         manager.context_manager.get_context = Mock(return_value=None)
         
@@ -111,7 +107,7 @@ class TestRefactoredCcorc:
     
     def test_no_monkey_patching_in_launch(self):
         """Test that monkey-patching code was removed"""
-        manager = ccorc_module.SessionCLIManager()
+        manager = SessionCLIManager()
         
         # Read the launch_team method source
         import inspect

@@ -151,6 +151,7 @@ class TeamLaunchService:
             if not existing_context:
                 self._register_team_context(
                     context_name, 
+                    team_name,  # Pass config file name for metadata
                     team_config, 
                     agent_configs, 
                     orchestrator,
@@ -159,6 +160,7 @@ class TeamLaunchService:
             else:
                 self._update_team_context(
                     context_name, 
+                    team_name,  # Pass config file name for metadata
                     team_config, 
                     agent_configs, 
                     orchestrator,
@@ -332,6 +334,7 @@ class TeamLaunchService:
     def _register_team_context(
         self,
         context_name: str,
+        team_name: str,  # Config file name for metadata
         team_config: Any,
         agent_configs: Dict[str, Dict[str, Any]],
         orchestrator: Any,
@@ -357,7 +360,7 @@ class TeamLaunchService:
             agents=agents,
             tmux_session=tmux_session,
             working_dir=working_dir,
-            metadata={"team_name": team_config.name}
+            metadata={"team_name": team_name}  # Use config file name, not display name
         )
         
         self.logger.info(f"Team context '{context_name}' registered for persistence")
@@ -365,6 +368,7 @@ class TeamLaunchService:
     def _update_team_context(
         self,
         context_name: str,
+        team_name: str,  # Config file name for metadata
         team_config: Any,
         agent_configs: Dict[str, Dict[str, Any]],
         orchestrator: Any,
@@ -391,7 +395,7 @@ class TeamLaunchService:
             context_name=context_name,
             agents=agents,
             tmux_session=orchestrator.tmux.session_name,
-            metadata={"team_name": team_config.name}
+            metadata={"team_name": team_name}  # Use config file name, not display name
         )
 
         self.logger.info(f"Team context '{context_name}' updated")

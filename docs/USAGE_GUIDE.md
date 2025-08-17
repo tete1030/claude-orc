@@ -94,6 +94,43 @@ Persistent team sessions that maintain state across restarts. Each context inclu
 ### Agents
 Individual Claude instances with specific roles, prompts, and models. Agents communicate via MCP (Model Context Protocol) tools.
 
+## Launch vs Resume: When to Use Each Command
+
+### Use `ccorc launch` when:
+- **Starting a new project** or completely fresh work
+- **Creating the first context** for a team
+- **Need clean slate** with no previous conversation history
+- **Different project/context name** from existing contexts
+- **Want to avoid session conflicts** or corruption
+
+Examples:
+```bash
+ccorc launch devops-team new-feature    # New feature development
+ccorc launch security-team audit-2024   # Fresh security audit
+ccorc launch data-team monthly-report   # New monthly analysis
+```
+
+### Use `ccorc resume` when:
+- **Continuing previous work** in an existing context
+- **Want to maintain conversation history** and context
+- **Session was interrupted** and you want to reconnect
+- **Context already exists** and you want to pick up where you left off
+
+Examples:
+```bash
+ccorc resume new-feature              # Continue feature development
+ccorc resume audit-2024 -f            # Resume audit, force restart if needed
+ccorc resume monthly-report           # Continue analysis work
+```
+
+### Key Differences:
+| Aspect | Launch | Resume |
+|--------|--------|--------|
+| **Context Creation** | Creates new context | Uses existing context |
+| **Session History** | Fresh sessions | Restores previous sessions |
+| **Behavior if exists** | Fails with error | Connects to existing |
+| **Use Case** | New work | Continue work |
+
 ## Working with Teams
 
 ### Available Teams
@@ -213,42 +250,63 @@ claude-bg logs team-bg_[timestamp]
 
 ## Common Workflows
 
-### Development Team Workflow
-1. Launch team with task:
+### Starting a New Project
+1. **Create new team context** for fresh project:
    ```bash
-   ccorc launch devops-team -t "Build authentication system"
+   ccorc launch devops-team auth-project -t "Build authentication system"
    ```
 
-2. Monitor progress:
+2. **Monitor progress**:
    ```bash
-   tmux attach -t devops-team
+   tmux attach -t auth-project
    ```
 
-3. Check team health:
+3. **Check team health**:
    ```bash
-   ccorc health devops-team
+   ccorc health auth-project
+   ```
+
+### Continuing Existing Work
+1. **Resume existing context**:
+   ```bash
+   ccorc resume auth-project -t "Continue with unit tests"
+   ```
+
+2. **If sessions have issues, force restart**:
+   ```bash
+   ccorc resume auth-project -f
    ```
 
 ### Data Processing Workflow
-1. Launch with specific model:
+1. **Create new data processing context**:
    ```bash
-   ccorc launch data-team -m opus
+   ccorc launch data-team q4-analysis -m opus -t "Process Q4 data"
    ```
 
-2. Run in background:
+2. **Resume for continued processing**:
    ```bash
-   claude-bg start 'ccorc launch data-team -t "Process Q4 data"' data-job
+   ccorc resume q4-analysis -t "Generate reports"
+   ```
+
+3. **Run in background** (new projects):
+   ```bash
+   claude-bg start 'ccorc launch data-team monthly-batch -t "Process monthly data"' data-job
    ```
 
 ### Security Audit Workflow
-1. Fresh start for new audit:
+1. **Start new audit context**:
    ```bash
-   ccorc launch security-team -F -t "Audit codebase for vulnerabilities"
+   ccorc launch security-team audit-2024 -t "Audit codebase for vulnerabilities"
    ```
 
-2. Enable debug mode:
+2. **Resume audit sessions**:
    ```bash
-   ccorc launch security-team -d
+   ccorc resume audit-2024 -t "Review findings and create reports"
+   ```
+
+3. **Debug mode for troubleshooting**:
+   ```bash
+   ccorc resume audit-2024 -d
    ```
 
 ## Best Practices

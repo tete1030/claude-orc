@@ -62,7 +62,8 @@ class TestTeamContextAgentInfo:
             "role": "Developer",
             "model": "opus",
             "pane_index": 1,
-            "session_id": "abc-def-123"
+            "session_id": "abc-def-123",
+            "fork_history": []  # New field added to dataclass
         }
         
         # Ensure it's JSON serializable

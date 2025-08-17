@@ -3,7 +3,7 @@ Command Registry
 
 Central registry for all CLI commands.
 """
-from typing import Dict, Type
+from typing import Dict, Type, Optional
 from argparse import ArgumentParser
 
 from .base_command import BaseCommand
@@ -15,6 +15,7 @@ from .export_command import ExportCommand
 from .import_command import ImportCommand
 from .teams_command import TeamsCommand
 from .launch_command import LaunchCommand
+from .resume_command import ResumeCommand
 
 
 class CommandRegistry:
@@ -37,6 +38,7 @@ class CommandRegistry:
             ImportCommand,
             TeamsCommand,
             LaunchCommand,
+            ResumeCommand,
         ]
         
         for cmd_class in command_classes:
@@ -48,6 +50,8 @@ class CommandRegistry:
         # Short aliases for common commands
         self.aliases["ls"] = "list"
         self.aliases["rm"] = "clean"
+        self.aliases["l"] = "launch"
+        self.aliases["r"] = "resume"
     
     def setup_parser(self, parser: ArgumentParser) -> None:
         """Set up argument parser with all commands"""
@@ -95,6 +99,6 @@ class CommandRegistry:
         else:
             return 1
     
-    def get_command(self, name: str) -> BaseCommand:
+    def get_command(self, name: str) -> Optional[BaseCommand]:
         """Get a command by name"""
         return self.commands.get(name)

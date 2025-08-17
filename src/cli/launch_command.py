@@ -61,11 +61,6 @@ class LaunchCommand(BaseCommand):
             default=False,
             help="Disable automatic context cleanup on exit"
         )
-        parser.add_argument(
-            "-F", "--fresh",
-            action="store_true",
-            help="Force new sessions, ignore existing session IDs"
-        )
     
     def execute(self, args: Namespace, manager) -> int:
         # Parse agent model overrides
@@ -81,7 +76,7 @@ class LaunchCommand(BaseCommand):
             debug=args.debug,
             task=args.task,
             auto_cleanup=args.auto_cleanup,
-            fresh=args.fresh,
+            fresh=True,  # Launch always creates new sessions
         )
         
         return 0 if success else 1
